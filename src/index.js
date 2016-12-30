@@ -18,8 +18,7 @@ const config = ['namespace', 'secret', 'token', 'username', 'telebotRedis'].redu
     }
     return config;
 }, {
-    namespace: 'tb-login',
-    telebotRedis: 'redis://localhost:6333',
+    namespace: 'telegrambot-login',
     redisHost: '127.0.0.1'
 });
 
@@ -122,4 +121,3 @@ async handleTelegramLogin(request) {
 async function end() {
     sub.quit();
 }
-

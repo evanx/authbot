@@ -37,7 +37,7 @@ async function startHttpServer() {
 
 Note that `config` is populated from environment variables as follows:
 ```javascript
-const config = ['namespace', 'secret', 'token', 'username'].reduce((config, key) => {
+const config = ['namespace', 'secret', 'token', 'username', 'telebotRedis'].reduce((config, key) => {
     if (process.env[key] === '') {
         throw new Error('empty config ' + key);
     } else if (process.env[key]) {
@@ -47,7 +47,7 @@ const config = ['namespace', 'secret', 'token', 'username'].reduce((config, key)
     }
     return config;
 }, {
-    namespace: 'botlogin',
+    namespace: 'telegrambot-login',
     redisHost: '127.0.0.1'
 });
 ```
