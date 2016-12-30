@@ -1,0 +1,36 @@
+{
+  "name": "telegrambot-login",
+  "version": "0.0.1",
+  "description": "Subscribe to Redis channel and push messages to a Redis list",
+  "main": "index.js",
+  "scripts": {
+    "lint": "eslint --cache src",
+    "build": "babel src/index.js --out-file build/index.js",
+    "development": "babel src/index.js --out-file build/index.js; NODE_ENV=development node build/index.js",
+    "test": "NODE_ENV=test node build/index.js",
+    "start": "NODE_ENV=production node build/index.js"
+  },
+  "author": "Evan Summers",
+  "license": "ISC",
+  "dependencies": {
+    "bluebird": "^3.4.6",
+    "koa": "^2.0.0",
+    "koa-bodyparser": "^3.2.0",
+    "koa-router": "^7.0.1",
+    "lodash": "^4.17.2",
+    "redis": "^2.6.3"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.18.0",
+    "babel-preset-es2017": "^6.16.0",
+    "eslint": "^3.12.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/evanx/telegrambot-login.git"
+  },
+  "bugs": {
+    "url": "https://github.com/evanx/telegrambot-login/issues"
+  },
+  "homepage": "https://github.com/evanx/telegrambot-login#readme"
+}
