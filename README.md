@@ -134,7 +134,10 @@ Missing configs:
   telebotRedis e.g. 'redis://localhost:6333'
     Remote redis for bot messages, especially for development
       see https://github.com/evanx/webhook-push
-Example start:
+```
+
+Also it prints a `npm start` CLI using the `example` config properties:
+```
 domain='authdemo.webserva.com' \
 secret='z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt' \
 token='243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc' \
