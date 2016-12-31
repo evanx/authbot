@@ -5,10 +5,9 @@
   "main": "index.js",
   "scripts": {
     "lint": "eslint --cache src",
-    "build": "babel src/index.js --out-file build/index.js",
     "development": "NODE_ENV=development node --harmony-async-await src/index.js",
-    "test": "NODE_ENV=test node build/index.js",
-    "start": "NODE_ENV=production node build/index.js"
+    "test": "NODE_ENV=test node --harmony-async-await src/index.js",
+    "start": "NODE_ENV=production node --harmony-async-await src/index.js"
   },
   "author": "Evan Summers",
   "license": "ISC",

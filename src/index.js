@@ -30,6 +30,12 @@ const configMeta = {
         description: 'HTTPS web domain to auth access',
         example: 'authdemo.webserva.com'
     },
+    bot: {
+        description: 'Telegram Bot name',
+        example: 'ExAuthDemoBot',
+        info: 'https://core.telegram.org/bots/api',
+        hint: 'https://telegram.me/BotFather'
+    },
     secret: {
         description: 'Telegram Bot secret',
         example: 'z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt',
@@ -86,19 +92,22 @@ if (missingConfigs.length) {
     console.error([
         ...missingConfigs.map(key => {
             const meta = configMeta[key];
-            return `${key}='${meta.example}' \\`;
+            return `  ${key}='${meta.example}' \\`;
         }),
-        'npm start'
+        '  npm start'
     ].join('\n'));
-    
+    console.error('\nTest Docker build:');
+    console.error([
+        `  docker build -t telegrambot-auth:test git@github.com:evanx/telegrambot-auth.git`
+    ].join('\n'));
     console.error('\nExample Docker run:');
     console.error([
-        `docker run -d -t ${config.namespace}:test \\`,
+        `  docker run -t ${config.namespace}:test -d \\`,
         ...missingConfigs.map(key => {
             const meta = configMeta[key];
-            return `  -e ${key}='${meta.example}' \\`;
+            return `    -e ${key}='${meta.example}' \\`;
         }),
-        `  ${config.namespace}-test`
+        `    ${config.namespace}-test`
     ].join('\n'));
     process.exit(1);
 }
@@ -106,7 +115,7 @@ if (missingConfigs.length) {
 logger.level = config.loggerLevel;
 
 const state = {
-    redirectNoAuth: process.env.redirectNoAuth || `https://telegram.me/${config.name}`,
+    redirectNoAuth: process.env.redirectNoAuth || `https://telegram.me/${config.bot}`,
     botUrl: `https://api.telegram.org/bot${config.token}`
 };
 

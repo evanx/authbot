@@ -70,6 +70,12 @@ const configMeta = {
         description: 'HTTPS web domain to auth access',
         example: 'authdemo.webserva.com'
     },
+    bot: {
+        description: 'Telegram Bot name',
+        example: 'ExAuthDemoBot',
+        info: 'https://core.telegram.org/bots/api',
+        hint: 'https://telegram.me/BotFather'
+    },    
     secret: {
         description: 'Telegram Bot secret',
         example: 'z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt',
@@ -119,6 +125,10 @@ If we start the service with missing config via environment variables, the follo
 ```shell
 domain e.g. 'authdemo.webserva.com'
   "HTTPS web domain to auth access"
+bot e.g. 'ExAuthDemoBot'
+  "Telegram Bot name"
+    see https://core.telegram.org/bots/api
+    see https://telegram.me/BotFather  
 secret e.g. 'z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt'
   "Telegram Bot secret"
     see https://core.telegram.org/bots/api#setwebhook
@@ -138,6 +148,7 @@ telebotRedis e.g. 'redis://localhost:6333'
 Also it prints a `npm start` CLI using the `example` config properties:
 ```
 domain='authdemo.webserva.com' \
+bot='ExAuthDemoBot' \
 secret='z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt' \
 token='243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc' \
 account='evanxsummers' \
@@ -154,6 +165,24 @@ console.error([
     }),
     'npm start'
 ].join('\n'));
+```
+
+## Docker build and run
+
+`npm start` with missing configs will print help including for Docker build and run:
+```javascript
+  docker build -t telegrambot-auth:test git@github.com:evanx/telegrambot-auth.git
+```
+The following shows sample run with the example config which you must edit for your environment
+i.e. with your own domain, account, bot name, token, secret etc:
+```javascript
+  docker run -t telegrambot-auth:test -d \
+    -e domain='authdemo.webserva.com' \
+    -e bot='ExAuthDemoBot' \
+    -e secret='z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt' \
+    -e token='243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc' \
+    -e account='evanxsummers' \
+    telegrambot-auth-test
 ```
 
 ## Docker notes
