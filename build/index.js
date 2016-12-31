@@ -325,7 +325,7 @@ if (missingConfigs.length) {
         const meta = configMeta[key];
         const lines = [`  ${ key } e.g. '${ meta.example }'`];
         if (meta.description) {
-            lines.push(`    ${ meta.description }`);
+            lines.push(`    "${ meta.description }"`);
         }
         if (meta.info) {
             lines.push(`      see ${ meta.info }`);
