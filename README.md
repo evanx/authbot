@@ -1,4 +1,4 @@
-# telegrambot-login
+# telegrambot-auth
 
 A service to enable web auth and login via Telegram bot.
 
@@ -21,43 +21,126 @@ async function start() {
 We auth HTTP logins using Koa:
 ```javascript
 async function startHttpServer() {
-    api.get('/webhook', async ctx => {
-    	ctx.body = ctx.params;
+    api.post('/webhook/*', async ctx => {
+        ctx.body = '';
+        const id = ctx.params[0];
+        if (id !== config.secret) {
+            logger.debug('invalid', ctx.request.url);
+        } else {
+            await handleMessage(ctx.request.body);
+        }
     });
-    api.get('/login', async ctx => {
-    	ctx.body = ctx.params;
+    api.get('/login/:username/:token', async ctx => {
+        await handleLogin(ctx);
+    });
+    api.get('/logout/:username', async ctx => {
+        await handleLogout(ctx);
     });
     app.use(api.routes());
     app.use(async ctx => {
-       ctx.statusCode = 404;
+        ctx.status = 404;
     });
     state.server = app.listen(config.port);
 }
 ```
 
-Note that `config` is populated from environment variables as follows:
+## Config
+
+The default configuration properties are hard-coded as follows:
 ```javascript
-const config = ['namespace', 'secret', 'token', 'username', 'telebotRedis'].reduce((config, key) => {
-    if (process.env[key] === '') {
-        throw new Error('empty config ' + key);
-    } else if (process.env[key]) {
+const configDefault = {
+    port: 8080,
+    namespace: 'telegrambot-auth',
+    redisHost: '127.0.0.1',
+    loginExpire: 30,
+    sessionExpire: 300,
+    cookieExpire: 60000,
+    sendTimeout: 8000,
+    redirectAuth: '/auth',
+    redirectNoAuth: '/noauth',
+    loggerLevel: 'debug'
+};
+```
+
+The following declares meta information about further required configuration:
+
+```javascript
+const configMeta = {
+    domain: {
+        description: 'HTTPS web domain to auth access',
+        example: 'authdemo.webserva.com'
+    },
+    secret: {
+        description: 'Telegram Bot secret',
+        example: 'z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt',
+        info: 'https://core.telegram.org/bots/api#setwebhook',
+        hint: 'https://github.com/evanx/random-base56'
+    },
+    token: {
+        description: 'Telegram Bot token',
+        example: '243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc',
+        info: 'https://core.telegram.org/bots/api#authorizing-your-bot',
+        hint: 'https://telegram.me/BotFather'
+    },
+    account: {
+        description: 'Authoritative Telegram username',
+        example: 'evanxsummers',
+        info: 'https://telegram.org'
+    },
+    telebotRedis: {
+        required: false,
+        description: 'Remote redis for incoming bot messages, especially for development',
+        example: 'redis://localhost:6333',
+        info: 'https://github.com/evanx/webhook-push'
+    }
+};
+```
+
+Our `config` is populated from environment variables as follows:
+```javascript
+const missingConfigs = [];
+const config = Object.keys(configMeta)
+.concat(Object.keys(configDefault))
+.reduce((config, key) => {
+    if (process.env[key]) {
+        assert(process.env[key] !== '', key);
         config[key] = process.env[key];
-    } else if (!config[key]) {
-        throw new Error('missing config ' + key);
+    } else if (!configDefault[key] && configMeta[key].required !== false) {
+        missingConfigs.push(key);
     }
     return config;
-}, {
-    namespace: 'telegrambot-login',
-    redisHost: '127.0.0.1'
-});
+}, configDefault);
 ```
-where we default `redisHost` to `localhost`
+where we check that an environment variable is not empty, for safety sake.
 
-Note that we check that an environment variable is not empty, for safety sake.
+## npm start
 
-For example we start this service:
+If we start the service with missing config via environment variables, the following help is printed:
 ```shell
-port=8888 secret=my-bot-secret token=my-bot-token npm start
+Missing configs:
+  domain e.g. 'authdemo.webserva.com'
+    HTTPS web domain to auth access
+  secret e.g. 'z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt'
+    Telegram Bot secret
+      see https://core.telegram.org/bots/api#setwebhook
+      see https://github.com/evanx/random-base56
+  token e.g. '243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc'
+    Telegram Bot token
+      see https://core.telegram.org/bots/api#authorizing-your-bot
+      see https://telegram.me/BotFather
+  account e.g. 'evanxsummers'
+    Authoritative Telegram username
+      see https://telegram.org
+  telebotRedis e.g. 'redis://localhost:6333'
+    Remote redis for bot messages, especially for development
+      see https://github.com/evanx/webhook-push
+Example start:
+domain='authdemo.webserva.com' \
+secret='z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt' \
+token='243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc' \
+account='evanxsummers' \
+telebotRedis='redis://localhost:6333' \
+npm start
 ```
 
 ## Docker notes
@@ -79,9 +162,9 @@ cat /etc/issue
 
 Let's build our application container:
 ```shell
-docker build -t telegrambot-login:test https://github.com/evanx/telegrambot-login.git
+docker build -t telegrambot-auth:test https://github.com/evanx/telegrambot-auth.git
 ```
-where the image is named and tagged as `telegrambot-login:test`
+where the image is named and tagged as `telegrambot-auth:test`
 
 Notce that the default `Dockerfile` is as follows:
 ```
@@ -114,20 +197,20 @@ which we check that set e.g. to `172.18.0.2`
 
 Finally we run our service container:
 ```shell
-docker run --network=redis --name telegrambot-login-test \
-  -e NODE_ENV=test -e redisHost=$redisHost -e subscribeChannel=logger:mylogger -d telegrambot-login:test
+docker run --network=redis --name telegrambot-auth-test \
+  -e NODE_ENV=test -e redisHost=$redisHost -e subscribeChannel=logger:mylogger -d telegrambot-auth:test
 ```
 where we configure `redisHost` as the `redis-login` container.
 
 Note that we:
 - use the `redis` isolated network bridge for the `redis-login` container
-- name this container `telegrambot-login-test`
-- use the previously built image `telegrambot-login:test`
+- name this container `telegrambot-auth-test`
+- use the previously built image `telegrambot-auth:test`
 
 Get its IP address:
 ```
 address=`
-  docker inspect --format '{{ .NetworkSettings.Networks.redis.IPAddress }}' telegrambot-login-test
+  docker inspect --format '{{ .NetworkSettings.Networks.redis.IPAddress }}' telegrambot-auth-test
 `
 ```
 

@@ -1,28 +1,103 @@
 const assert = require('assert');
+const base32 = require('thirty-two');
+const crypto = require('crypto');
+const fetch = require('node-fetch');
 const lodash = require('lodash');
 const Promise = require('bluebird');
 const Koa = require('koa');
 const KoaRouter = require('koa-router');
 const bodyParser = require('koa-bodyparser');
+const logger = require('winston');
 
 const app = new Koa();
 const api = KoaRouter();
 
-const config = ['namespace', 'secret', 'token', 'username', 'telebotRedis'].reduce((config, key) => {
-    if (process.env[key] === '') {
-        throw new Error('empty config ' + key);
-    } else if (process.env[key]) {
+const configDefault = {
+    port: 8080,
+    namespace: 'telegrambot-auth',
+    redisHost: '127.0.0.1',
+    loginExpire: 30,
+    sessionExpire: 300,
+    cookieExpire: 60000,
+    sendTimeout: 8000,
+    redirectAuth: '/auth',
+    redirectNoAuth: '/noauth',
+    loggerLevel: 'debug'
+};
+
+const configMeta = {
+    domain: {
+        description: 'HTTPS web domain to auth access',
+        example: 'authdemo.webserva.com'
+    },
+    secret: {
+        description: 'Telegram Bot secret',
+        example: 'z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt',
+        info: 'https://core.telegram.org/bots/api#setwebhook',
+        hint: 'https://github.com/evanx/random-base56'
+    },
+    token: {
+        description: 'Telegram Bot token',
+        example: '243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc',
+        info: 'https://core.telegram.org/bots/api#authorizing-your-bot',
+        hint: 'https://telegram.me/BotFather'
+    },
+    account: {
+        description: 'Authoritative Telegram username',
+        example: 'evanxsummers',
+        info: 'https://telegram.org'
+    },
+    telebotRedis: {
+        description: 'Remote redis for bot messages, especially for development',
+        example: 'redis://localhost:6333',
+        info: 'https://github.com/evanx/webhook-push'
+    }
+};
+
+const missingConfigs = [];
+const config = Object.keys(configMeta)
+.concat(Object.keys(configDefault))
+.reduce((config, key) => {
+    if (process.env[key]) {
+        assert(process.env[key] !== '', key);
         config[key] = process.env[key];
-    } else if (!config[key]) {
-        throw new Error('missing config ' + key);
+    } else if (!configDefault[key] && configMeta[key].required !== false) {
+        missingConfigs.push(key);
     }
     return config;
-}, {
-    namespace: 'telegrambot-login',
-    redisHost: '127.0.0.1'
-});
+}, configDefault);
+if (missingConfigs.length) {
+    console.error(`Missing configs:`);
+    console.error(lodash.flatten(missingConfigs.map(key => {
+        const meta = configMeta[key];
+        const lines = [`  ${key} e.g. '${meta.example}'`];
+        if (meta.description) {
+            lines.push(`    ${meta.description}`);
+        }
+        if (meta.info) {
+            lines.push(`      see ${meta.info}`);
+        }
+        if (meta.hint) {
+            lines.push(`      see ${meta.hint}`);
+        }
+        return lines;
+    })).join('\n'));
+    console.error('Example start:');
+    console.error([
+        ...missingConfigs.map(key => {
+            const meta = configMeta[key];
+            return `${key}='${meta.example}' \\`;
+        }),
+        'npm start'
+    ].join('\n'));
+    process.exit(1);
+}
+
+logger.level = config.loggerLevel;
 
 const state = {
+    redirectNoAuth: process.env.redirectNoAuth || `https://telegram.me/${config.name}`,
+    botUrl: `https://api.telegram.org/bot${config.token}`
 };
 
 const redis = require('redis');
@@ -37,10 +112,18 @@ async function multiExecAsync(client, multiFunction) {
     return Promise.promisify(multi.exec).call(multi);
 }
 
+function generateToken(length = 16) {
+    const Letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const Symbols = Letters + Letters.toLowerCase() + '0123456789';
+    return lodash.reduce(crypto.randomBytes(length), (result, value) => {
+        return result + Symbols[Math.floor(value * Symbols.length / 256)];
+    }, '');
+}
+
 (async function() {
     state.started = Math.floor(Date.now()/1000);
     state.pid = process.pid;
-    console.log('start', {config, state});
+    logger.info('start', {config, state});
     if (process.env.NODE_ENV === 'development') {
         return startDevelopment();
     } else if (process.env.NODE_ENV === 'test') {
@@ -51,72 +134,156 @@ async function multiExecAsync(client, multiFunction) {
 }());
 
 async function startTest() {
-    return startProduction();
+    return start();
 }
 
 async function startDevelopment() {
-    return startProduction();
+    return start();
 }
 
 async function startProduction() {
+    return start();
+}
+
+async function start() {
     sub.on('message', (channel, message) => {
-        if (process.env.NODE_ENV !== 'production') {
-            console.log({channel, message});
-        }
+        logger.debug({channel, message});
+        handleMessage(JSON.parse(message));
     });
     sub.subscribe('telebot:' + config.secret);
     return startHttpServer();
 }
 
 async function startHttpServer() {
-    api.get('/webhook', async ctx => {
-    	ctx.body = ctx.params;
+    api.post('/webhook/*', async ctx => {
+        ctx.body = '';
+        const id = ctx.params[0];
+        if (id !== config.secret) {
+            logger.debug('invalid', ctx.request.url);
+        } else {
+            await handleMessage(ctx.request.body);
+        }
     });
-    api.get('/login', async ctx => {
-    	ctx.body = ctx.params;
+    api.get('/login/:username/:token', async ctx => {
+        await handleLogin(ctx);
+    });
+    api.get('/logout/:username', async ctx => {
+        await handleLogout(ctx);
     });
     app.use(api.routes());
     app.use(async ctx => {
-        ctx.statusCode = 404;
+        ctx.status = 404;
     });
     state.server = app.listen(config.port);
 }
 
-/*
-async handleTelegramLogin(request) {
-   const now = Millis.now();
-   this.logger.info('handleTelegramLogin', request);
-   const match = request.text.match(/\/login$/);
-   if (!match) {
-      await this.sendTelegram(request.chatId, 'html', [
-         `Try <code>/login</code>`
-      ]);
-      return;
-   }
-   const account = request.username;
-   const role = 'admin';
-   const id = 'admin';
-   const token = this.generateTokenKey().toLowerCase();
-   const loginKey = this.adminKey('login', token);
-   this.logger.info('handleTelegramLogin', loginKey, token, request);
-   let [hmset] = await this.redis.multiExecAsync(multi => {
-      this.logger.info('handleTelegramLogin hmset', loginKey, this.config.loginExpire);
-      multi.hmset(loginKey, {account, role, id});
-      multi.expire(loginKey, this.config.loginExpire);
-   });
-   if (hmset) {
-      await this.sendTelegramReply(request, 'html', [
-         `You can login via https://${[this.config.openHostname, 'login', account, role, id, token].join('/')}.`,
-         `This must be done in the next ${Millis.formatVerboseDuration(1000*this.config.loginExpire)}`,
-         `otherwise you need to repeat this request, after it expires.`
-      ]);
-   } else {
-      await this.sendTelegramReply(request, 'html', [
-         `Apologies, the login command failed.`,
-      ]);
-   }
+async function handleLogout(ctx) {
 }
-*/
+
+async function handleLogin(ctx) {
+    const ua = ctx.get('User-Agent');
+    logger.debug('handleLogin', ua);
+    if (ua.startsWith('TelegramBot')) {
+        ctx.status = 403;
+        return;
+    }
+    const {username, token} = ctx.params;
+    const loginKey = [config.namespace, 'login', token].join(':');
+    const [hgetall] = await multiExecAsync(client, multi => {
+        multi.hgetall(loginKey);
+    });
+    logger.debug('login', ua, loginKey, hgetall);
+    if (!hgetall) {
+        ctx.status = 403;
+        ctx.redirect(state.redirectNoAuth);
+        return;
+    }
+    assert.equal(hgetall.username, username, 'id');
+    const sessionId = [token, generateToken(16)].join('_');
+    const sessionRedisKey = [config.namespace, 'session', sessionId].join(':');
+    const [hmset] = await multiExecAsync(client, multi => {
+        multi.hmset(sessionRedisKey, {username});
+        multi.expire(sessionRedisKey, config.sessionExpire);
+        multi.del(loginKey);
+    });
+    ctx.cookie('sessionId', sessionId, {maxAge: config.cookieExpire, domain: config.domain});
+    ctx.redirect(config.redirectAuth);
+}
+
+async function handleMessage(message) {
+    const from = message.message.from;
+    const request = {
+        chatId: message.message.chat.id,
+        username: from.username,
+        name: from.first_name || from.username,
+        text: message.message.text,
+        timestamp: message.message.date
+    };
+    logger.debug('webhook', request, message.message);
+    handleTelegramLogin(request);
+}
+
+async function handleTelegramLogin(request) {
+    const match = request.text.match(/\/login$/);
+    if (!match) {
+        await sendTelegram(request.chatId, 'html', [
+            `Try <code>/login</code>`
+        ]);
+        return;
+    }
+    const username = request.username;
+    const token = generateToken(8);
+    const loginKey = [config.namespace, 'login', token].join(':');
+    let [hmset] = await multiExecAsync(client, multi => {
+        multi.hmset(loginKey, {username});
+        multi.expire(loginKey, config.loginExpire);
+    });
+    if (hmset) {
+        await sendTelegramReply(request, 'html', [
+            `You can login via https://${[config.domain, 'login', username, token].join('/')}.`,
+            `This login expires in ${config.loginExpire} seconds`
+        ]);
+    } else {
+        await sendTelegramReply(request, 'html', [
+            `Apologies, the login command failed.`,
+        ]);
+    }
+}
+
+async function sendTelegramReply(request, format, ...content) {
+    if (request.chatId && request.name) {
+        await sendTelegram(request.chatId, format,
+            `Thanks, ${request.name}.`,
+            ...content
+        );
+    } else {
+        logger.error('sendTelegramReply', request);
+    }
+}
+
+async function sendTelegram(chatId, format, ...content) {
+    logger.debug('sendTelegram', chatId, format, content);
+    try {
+        const text = lodash.trim(lodash.flatten(content).join(' '));
+        assert(chatId, 'chatId');
+        let uri = `sendMessage?chat_id=${chatId}`;
+        uri += '&disable_notification=true';
+        if (format === 'markdown') {
+            uri += `&parse_mode=Markdown`;
+        } else if (format === 'html') {
+            uri += `&parse_mode=HTML`;
+        }
+        uri += `&text=${encodeURIComponent(text)}`;
+        const url = [state.botUrl, uri].join('/');
+        logger.info('sendTelegram url', url, chatId, format, text);
+        const res = await fetch(url, {timeout: config.sendTimeout});
+        if (res.status !== 200) {
+            logger.warn('sendTelegram', chatId, url);
+        }
+    } catch (err) {
+        logger.error(err);
+    }
+}
 
 async function end() {
     sub.quit();

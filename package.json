@@ -1,12 +1,12 @@
 {
-  "name": "telegrambot-login",
+  "name": "telegrambot-auth",
   "version": "0.0.1",
   "description": "Subscribe to Redis channel and push messages to a Redis list",
   "main": "index.js",
   "scripts": {
     "lint": "eslint --cache src",
     "build": "babel src/index.js --out-file build/index.js",
-    "development": "babel src/index.js --out-file build/index.js; NODE_ENV=development node build/index.js",
+    "development": "NODE_ENV=development node --harmony-async-await src/index.js",
     "test": "NODE_ENV=test node build/index.js",
     "start": "NODE_ENV=production node build/index.js"
   },
@@ -18,7 +18,10 @@
     "koa-bodyparser": "^3.2.0",
     "koa-router": "^7.0.1",
     "lodash": "^4.17.2",
-    "redis": "^2.6.3"
+    "node-fetch": "^1.6.3",
+    "redis": "^2.6.3",
+    "thirty-two": "^1.0.2",
+    "winston": "^2.3.0"
   },
   "devDependencies": {
     "babel-cli": "^6.18.0",
@@ -27,10 +30,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/evanx/telegrambot-login.git"
+    "url": "git+https://github.com/evanx/telegrambot-auth.git"
   },
   "bugs": {
-    "url": "https://github.com/evanx/telegrambot-login/issues"
+    "url": "https://github.com/evanx/telegrambot-auth/issues"
   },
-  "homepage": "https://github.com/evanx/telegrambot-login#readme"
+  "homepage": "https://github.com/evanx/telegrambot-auth#readme"
 }
