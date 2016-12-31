@@ -117,23 +117,22 @@ where we check that an environment variable is not empty, for safety sake.
 
 If we start the service with missing config via environment variables, the following help is printed:
 ```shell
-Missing configs:
-  domain e.g. 'authdemo.webserva.com'
-    HTTPS web domain to auth access
-  secret e.g. 'z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt'
-    Telegram Bot secret
-      see https://core.telegram.org/bots/api#setwebhook
-      see https://github.com/evanx/random-base56
-  token e.g. '243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc'
-    Telegram Bot token
-      see https://core.telegram.org/bots/api#authorizing-your-bot
-      see https://telegram.me/BotFather
-  account e.g. 'evanxsummers'
-    Authoritative Telegram username
-      see https://telegram.org
-  telebotRedis e.g. 'redis://localhost:6333'
-    Remote redis for bot messages, especially for development
-      see https://github.com/evanx/webhook-push
+domain e.g. 'authdemo.webserva.com'
+  "HTTPS web domain to auth access"
+secret e.g. 'z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt'
+  "Telegram Bot secret"
+    see https://core.telegram.org/bots/api#setwebhook
+    see https://github.com/evanx/random-base56
+token e.g. '243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc'
+  "Telegram Bot token"
+    see https://core.telegram.org/bots/api#authorizing-your-bot
+    see https://telegram.me/BotFather
+account e.g. 'evanxsummers'
+  "Authoritative Telegram username"
+    see https://telegram.org
+telebotRedis e.g. 'redis://localhost:6333'
+  "Remote redis for bot messages, especially for development"
+    see https://github.com/evanx/webhook-push
 ```
 
 Also it prints a `npm start` CLI using the `example` config properties:
