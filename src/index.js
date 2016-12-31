@@ -82,13 +82,22 @@ if (missingConfigs.length) {
         }
         return lines;
     })).join('\n'));
-    console.error('Example start:');
+    console.error('\nExample start:');
     console.error([
         ...missingConfigs.map(key => {
             const meta = configMeta[key];
             return `${key}='${meta.example}' \\`;
         }),
         'npm start'
+    ].join('\n'));
+    console.error('\nExample Docker run:');
+    console.error([
+        `docker run -d -t ${config.namespace}:test \\`,
+        ...missingConfigs.map(key => {
+            const meta = configMeta[key];
+            return `  -e ${key}='${meta.example}' \\`;
+        }),
+        `  ${config.namespace}-test`
     ].join('\n'));
     process.exit(1);
 }
