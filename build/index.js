@@ -340,6 +340,7 @@ if (missingConfigs.length) {
         const meta = configMeta[key];
         return `${ key }='${ meta.example }' \\`;
     }), 'npm start'].join('\n'));
+
     console.error('\nExample Docker run:');
     console.error([`docker run -d -t ${ config.namespace }:test \\`, ...missingConfigs.map(key => {
         const meta = configMeta[key];

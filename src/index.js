@@ -90,6 +90,7 @@ if (missingConfigs.length) {
         }),
         'npm start'
     ].join('\n'));
+    
     console.error('\nExample Docker run:');
     console.error([
         `docker run -d -t ${config.namespace}:test \\`,
