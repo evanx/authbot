@@ -142,6 +142,17 @@ account='evanxsummers' \
 telebotRedis='redis://localhost:6333' \
 npm start
 ```
+where this help is generated from `configMeta`
+```javascript
+console.error('Example start:');
+console.error([
+    ...missingConfigs.map(key => {
+        const meta = configMeta[key];
+        return `${key}='${meta.example}' \\`;
+    }),
+    'npm start'
+].join('\n'));
+```
 
 ## Docker notes
 
