@@ -1,5 +1,5 @@
 
-# telegram-authbot
+# authbot
 
 A service to enable web auth and login to a custom domain facilitated via a Telegram "auth bot."
 
