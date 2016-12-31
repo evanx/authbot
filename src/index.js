@@ -60,6 +60,8 @@ const configMeta = {
     }
 };
 
+const state = {};
+const configFile = (!process.env.configFile? null: require(process.env.configFile));
 const missingConfigs = [];
 const config = Object.keys(configMeta)
 .concat(Object.keys(configDefault))
@@ -67,6 +69,8 @@ const config = Object.keys(configMeta)
     if (process.env[key]) {
         assert(process.env[key] !== '', key);
         config[key] = process.env[key];
+    } else if (configFile && configFile[key]) {
+        config[key] = configFile[key];
     } else if (!configDefault[key] && configMeta[key].required !== false) {
         missingConfigs.push(key);
     }
@@ -114,10 +118,25 @@ if (missingConfigs.length) {
 
 logger.level = config.loggerLevel;
 
-const state = {
-    redirectNoAuth: process.env.redirectNoAuth || `https://telegram.me/${config.bot}`,
-    botUrl: `https://api.telegram.org/bot${config.token}`
-};
+state.redirectNoAuth = process.env.redirectNoAuth || `https://telegram.me/${config.bot}`;
+state.botUrl = `https://api.telegram.org/bot${config.token}`;
+
+if (configFile && process.env.NODE_ENV === 'development') {
+    const webhookUrl = `https://${configFile.webhookDomain}/webhook/${config.secret}`;
+    const setWebhookUrl = [
+        state.botUrl,
+        `setWebhook?url=${encodeURI(webhookUrl)}`
+    ].join('/');
+    const subscribeChannel = [configFile.remoteNamespace, config.secret].join(':');
+    console.log(`ssh -L${configFile.forwardedPort}:127.0.0.1:6379 ${configFile.remoteHost}`);
+    console.log(`redis-cli -p ${configFile.forwardedPort} subscribe "${subscribeChannel}"`);
+    console.log([
+        ...Object.keys(config).map(key => `${key}=${config[key]}`),
+        'npm run development'
+    ].join(' '));
+    console.log(`curl '${setWebhookUrl}' | jq '.'`);
+}
+
 
 const redis = require('redis');
 const sub = redis.createClient(config.telebotRedis);
