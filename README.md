@@ -1,40 +1,43 @@
-# telegrambot-auth
 
-A service to enable web auth and login via Telegram bot.
+# telegram-authbot
+
+A service to enable web auth and login to a custom domain facilitated via a Telegram "auth bot."
+
+- create an auth bot for your domain e.g. `@someDomainAuthBot` via command `/newbot` to `@BotFather`
+- configure and deploy this service on your domain for location `/authbot`
+- set bot webhook via `api.telegram.org` to `/authbot`
+- as a user send your bot the command `/in`
+- your authbot will reply with a magic login link to itself e.g. `/authbot/in/${user}/${token}`
+- the authbot HTTP handler will enroll the session in Redis
+- the authbot will redirect e.g. `/home` for your actual site, with the session cookie set
+- your site can verify the session cookie via Redis and get the Telegram username and role
+- the original authoritative (admin) Telegram username can authorise other users
+
+This provides a relatively easy way to provide authentication and authorisation for any domain:
+- no signup required, just use Telegram
+- works great on mobile, use the Telegram app
+- works great on desktop, use https://web.telegram.org
+- no email verification required, as you have the authentic Telegram username
+- minimal code required, just verify that the session token in the cookie matches that in Redis
 
 ## Implementation
-
-The essence of the implementation is as follows:
-```javascript
-async function start() {
-    sub.on('message', (channel, message) => {
-        if (process.env.NODE_ENV !== 'production') {
-            console.log({channel, message});
-        }
-        handleMessage(JSON.parse(message));
-    });
-    sub.subscribe(config.subscribeChannel);
-    return startHttpServer();
-}
-```
 
 We auth HTTP logins using Koa:
 ```javascript
 async function startHttpServer() {
-    api.post('/webhook/*', async ctx => {
+    api.post('/authbot/webhook/:secret', async ctx => {
         ctx.body = '';
-        const id = ctx.params[0];
-        if (id !== config.secret) {
+        if (ctx.params.secret !== config.secret) {
             logger.debug('invalid', ctx.request.url);
         } else {
             await handleMessage(ctx.request.body);
         }
     });
-    api.get('/login/:username/:token', async ctx => {
-        await handleLogin(ctx);
+    api.get('/authbot/in/:username/:token', async ctx => {
+        await handleIn(ctx);
     });
-    api.get('/logout/:username', async ctx => {
-        await handleLogout(ctx);
+    api.get('/authbot/out', async ctx => {
+        await handleOut(ctx);
     });
     app.use(api.routes());
     app.use(async ctx => {
@@ -50,7 +53,7 @@ The default configuration properties are hard-coded as follows:
 ```javascript
 const configDefault = {
     port: 8080,
-    namespace: 'telegrambot-auth',
+    namespace: 'authbot',
     redisHost: '127.0.0.1',
     loginExpire: 30,
     sessionExpire: 300,
@@ -61,6 +64,7 @@ const configDefault = {
     loggerLevel: 'debug'
 };
 ```
+where `namespace` is used to prefix auth bot keys in Redis, for pending logins and active sessions.
 
 The following declares meta information about further required configuration:
 
@@ -102,17 +106,20 @@ const configMeta = {
 };
 ```
 
-Our `config` is populated from environment variables as follows:
+The `config` is populated from environment variables as follows:
 ```javascript
-const missingConfigs = [];
+const configFile = (!process.env.configFile? null: require(process.env.configFile));
+const missingConfigKeys = [];
 const config = Object.keys(configMeta)
 .concat(Object.keys(configDefault))
 .reduce((config, key) => {
     if (process.env[key]) {
         assert(process.env[key] !== '', key);
         config[key] = process.env[key];
+    } else if (configFile && configFile[key]) {
+        config[key] = configFile[key];
     } else if (!configDefault[key] && configMeta[key].required !== false) {
-        missingConfigs.push(key);
+        missingConfigKeys.push(key);
     }
     return config;
 }, configDefault);
@@ -159,7 +166,7 @@ where this help is generated from `configMeta`
 ```javascript
 console.error('Example start:');
 console.error([
-    ...missingConfigs.map(key => {
+    ...missingConfigKeys.map(key => {
         const meta = configMeta[key];
         return `${key}='${meta.example}' \\`;
     }),

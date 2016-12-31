@@ -14,7 +14,7 @@ const api = KoaRouter();
 
 const configDefault = {
     port: 8080,
-    namespace: 'telegrambot-auth',
+    namespace: 'authbot',
     redisHost: '127.0.0.1',
     loginExpire: 30,
     sessionExpire: 300,
@@ -31,7 +31,7 @@ const configMeta = {
         example: 'authdemo.webserva.com'
     },
     bot: {
-        description: 'Telegram Bot name',
+        description: 'Telegram Bot name i.e. this authbot',
         example: 'ExAuthDemoBot',
         info: 'https://core.telegram.org/bots/api',
         hint: 'https://telegram.me/BotFather'
@@ -62,56 +62,66 @@ const configMeta = {
 
 const state = {};
 const configFile = (!process.env.configFile? null: require(process.env.configFile));
-const missingConfigs = [];
+const configKeys = [];
+const missingConfigKeys = [];
 const config = Object.keys(configMeta)
 .concat(Object.keys(configDefault))
 .reduce((config, key) => {
     if (process.env[key]) {
         assert(process.env[key] !== '', key);
         config[key] = process.env[key];
+        configKeys.push(key);
     } else if (configFile && configFile[key]) {
         config[key] = configFile[key];
+        configKeys.push(key);
     } else if (!configDefault[key] && configMeta[key].required !== false) {
-        missingConfigs.push(key);
+        missingConfigKeys.push(key);
     }
     return config;
 }, configDefault);
-if (missingConfigs.length) {
+if (missingConfigKeys.length) {
+    const sp = Array(3).join(' ');
     console.error(`Missing configs:`);
-    console.error(lodash.flatten(missingConfigs.map(key => {
+    console.error(lodash.flatten(missingConfigKeys.map(key => {
         const meta = configMeta[key];
-        const lines = [`  ${key} e.g. '${meta.example}'`];
+        const lines = [`${sp}${key} e.g. '${meta.example}'`];
         if (meta.description) {
-            lines.push(`    "${meta.description}"`);
+            lines.push(`${sp}"${meta.description}"`);
         }
         if (meta.info) {
-            lines.push(`      see ${meta.info}`);
+            lines.push(`${sp}see ${meta.info}`);
         }
         if (meta.hint) {
-            lines.push(`      see ${meta.hint}`);
+            lines.push(`${sp}see ${meta.hint}`);
         }
         return lines;
     })).join('\n'));
     console.error('\nExample start:');
     console.error([
-        ...missingConfigs.map(key => {
-            const meta = configMeta[key];
-            return `  ${key}='${meta.example}' \\`;
+        ...configKeys.map(key => {
+            return `${sp}${key}='${config[key]}' \\`;
         }),
-        '  npm start'
+        ...missingConfigKeys.map(key => {
+            const meta = configMeta[key];
+            return `${sp}${key}='' \\`;
+        }),
+        `${sp}npm start`
     ].join('\n'));
     console.error('\nTest Docker build:');
     console.error([
-        `  docker build -t telegrambot-auth:test git@github.com:evanx/telegrambot-auth.git`
+        `${sp}docker build -t telegrambot-auth:test git@github.com:evanx/telegrambot-auth.git`
     ].join('\n'));
     console.error('\nExample Docker run:');
     console.error([
-        `  docker run -t ${config.namespace}:test -d \\`,
-        ...missingConfigs.map(key => {
-            const meta = configMeta[key];
-            return `    -e ${key}='${meta.example}' \\`;
+        `${sp}docker run -t ${config.namespace}:test -d \\`,
+        ...configKeys.map(key => {
+            return `${sp+sp}-e ${key}='${config[key]}' \\`;
         }),
-        `    ${config.namespace}-test`
+        ...missingConfigKeys.map(key => {
+            const meta = configMeta[key];
+            return `${sp+sp}-e ${key}='' \\`;
+        }),
+        `${sp+sp}${config.namespace}-test`
     ].join('\n'));
     process.exit(1);
 }
@@ -122,21 +132,21 @@ state.redirectNoAuth = process.env.redirectNoAuth || `https://telegram.me/${conf
 state.botUrl = `https://api.telegram.org/bot${config.token}`;
 
 if (configFile && process.env.NODE_ENV === 'development') {
-    const webhookUrl = `https://${configFile.webhookDomain}/webhook/${config.secret}`;
-    const setWebhookUrl = [
-        state.botUrl,
-        `setWebhook?url=${encodeURI(webhookUrl)}`
-    ].join('/');
+    [
+        `https://${configFile.webhookDomain}/webhook/${config.secret}`,
+        `https://${config.domain}/authbot/webhook/${config.secret}`
+    ].forEach(webhookUrl => {
+        const apiUrl = `${state.botUrl}/setWebhook?url=${encodeURI(webhookUrl)}`;
+        console.log(`curl '${apiUrl}' | jq '.'`);
+    });
+    console.log(`\nssh -L${configFile.forwardedPort}:127.0.0.1:6379 ${configFile.remoteHost}`);
     const subscribeChannel = [configFile.remoteNamespace, config.secret].join(':');
-    console.log(`ssh -L${configFile.forwardedPort}:127.0.0.1:6379 ${configFile.remoteHost}`);
-    console.log(`redis-cli -p ${configFile.forwardedPort} subscribe "${subscribeChannel}"`);
+    console.log(`\nredis-cli -p ${configFile.forwardedPort} subscribe "${subscribeChannel}"\n`);
     console.log([
         ...Object.keys(config).map(key => `${key}=${config[key]}`),
         'npm run development'
     ].join(' '));
-    console.log(`curl '${setWebhookUrl}' | jq '.'`);
 }
-
 
 const redis = require('redis');
 const sub = redis.createClient(config.telebotRedis);
@@ -151,11 +161,9 @@ async function multiExecAsync(client, multiFunction) {
 }
 
 function generateToken(length = 16) {
-    const Letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const Symbols = Letters + Letters.toLowerCase() + '0123456789';
-    return lodash.reduce(crypto.randomBytes(length), (result, value) => {
-        return result + Symbols[Math.floor(value * Symbols.length / 256)];
-    }, '');
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const charset = '0123456789' + letters + letters.toLowerCase();
+    return crypto.randomBytes(length).map(value => charset[Math.floor(value * charset.length / 256)]).join('');
 }
 
 (async function() {
