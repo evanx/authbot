@@ -279,26 +279,25 @@ async function handleError(ctx, err) {
     });
 }
 
-async function handleHome(ctx) {
-    const name = ctx.cookies.get('sessionId');
-    const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
-    ? `tg://${config.bot}`
-    : `https://telegram.me/${config.bot}`;
-    const botLink = `<a href="${botUrl}">${botUrl}</a>`;
-    ctx.body = [
-        `<html>`,
-        `<head>`,
-        `  <title>AuthBot Demo</title>`,
-        `</head>`,
-        `<body>`,
-        `<h1>Welcome</h1>`,
-        `<p>Use ${botLink} to login</p>`,
-        `</body>`,
-        `</html>`
-    ].join('\n');
+async function handleNoAuth(ctx) {
+    renderPage(ctx, {
+        heading: `No Auth`,
+        paragraphs: [
+            `Use {botLink} to login`
+        ]
+    });
 }
 
-async function handleAuth(ctx) {
+async function handleHome(ctx) {
+    renderPage(ctx, {
+        heading: `Welcome`,
+        paragraphs: [
+            `Use {botLink} to login`
+        ]
+    });
+}
+
+async function getSession(ctx) {
     const sessionId = ctx.cookies.get('sessionId');
     if (!sessionId) {
         throw new Error('No cookie');
@@ -310,36 +309,20 @@ async function handleAuth(ctx) {
     if (!session) {
         throw new Error('Session expired');
     }
-    const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
-    ? `tg://${config.bot}`
-    : `https://telegram.me/${config.bot}`;
-    const botLink = `<a href="${botUrl}">${botUrl}</a>`;
-    ctx.body = [
-        `<html>`,
-        `<head>`,
-        `  <title>AuthBot Demo</title>`,
-        `</head>`,
-        `<body>`,
-        `<h1>Hello ${session.name}</h1>`,
-        `<p>Incidently, your session ID is ${sessionId}. (This is set via cookie, and verified.)</p>`,
-        `<p>Logout to clear the session and cookie via <a href="/authbot/logout">/authbot/logout</a>.</p>`,
-        `<p>You can also logout by sending <tt>/out</tt> command to ${botLink}.</p>`,
-        `</body>`,
-        `</html>`
-    ].join('\n');
+    session.sessionId = sessionId;
+    return session;
 }
 
-async function handleNoAuth(ctx) {
-    ctx.body = [
-        `<html>`,
-        `<head>`,
-        `  <title>AuthBot Demo</title>`,
-        `</head>`,
-        `<body>`,
-        `<h1>No Auth</h1>`,
-        `</body>`,
-        `</html>`
-    ].join('\n');
+async function handleAuth(ctx) {
+    const session = await getSession(ctx);
+    renderPage(ctx, {
+        heading: `Welcome ${session.name}`,
+        paragraphs: [
+            `Logout to clear the session and cookie via <a href="/authbot/logout">/authbot/logout</a>`,
+            `You can also logout by sending <tt>/out</tt> command to {botLink}.`,
+            `Incidently, your session ID is ${session.sessionId}. (This is set via cookie, and verified.)`,
+        ]
+    });
 }
 
 async function handleLogout(ctx) {
