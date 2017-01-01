@@ -287,7 +287,7 @@ async function handleNoAuth(ctx) {
 }
 
 async function handleLogout(ctx) {
-    const sessionId = ctx.cookies.get('sessionId', sessionId);
+    const sessionId = ctx.cookies.get('sessionId');
     if (sessionId) {
         const sessionKey = [config.namespace, 'session', sessionId].join(':');
         const [session] = await multiExecAsync(client, multi => {
