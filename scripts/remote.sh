@@ -5,7 +5,7 @@ pid=''
 
 while true  
 do
-  redis-cli brpop 'authbot:index.js' 10 | tail -n +2 > tmp/index.js
+  redis-cli brpop 'authbot:src' 10 | tail -n +2 > tmp/index.js
   wc tmp/index.js
   head tmp/index.js 
   if head -1 tmp/index.js | grep '^const'

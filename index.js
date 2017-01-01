@@ -173,7 +173,6 @@ function generateToken(length = 16) {
     return crypto.randomBytes(length).map(value => charset.charCodeAt(Math.floor(value * charset.length / 256))).toString();
 }
 
-
 (async function() {
     state.started = Math.floor(Date.now()/1000);
     state.pid = process.pid;
@@ -211,6 +210,19 @@ async function start() {
             handleMessage(JSON.parse(message));
         });
         state.sub.subscribe([config.hubNamespace, config.secret].join(':'));
+    } else if (config.srcChannel) {
+        assert(config.srcFile, 'srcFile');
+        state.sub = redis.createClient();
+        state.sub.on('message', (channel, message) => {
+            fs.writeFile(config.srcFile, message, err => {
+                if (err) {
+                    logger.error('srcFile', srcFile, err);
+                } else {
+                    end();
+                }
+            });
+        });
+        state.sub.subscribe(config.srcChannel);
     }
     return startHttpServer();
 }
@@ -460,7 +472,11 @@ async function sendTelegram(chatId, format, ...content) {
 }
 
 async function end() {
+    client.quit();
     if (state.sub) {
         state.sub.quit();
+    }
+    if (state.server) {
+        state.server.close();
     }
 }
