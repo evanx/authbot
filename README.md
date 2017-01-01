@@ -92,7 +92,7 @@ const configMeta = {
         info: 'https://core.telegram.org/bots/api#authorizing-your-bot',
         hint: 'https://telegram.me/BotFather'
     },
-    account: {
+    admin: {
         description: 'Authoritative Telegram username i.e. bootstrap admin user',
         example: 'evanxsummers',
         info: 'https://telegram.org'
@@ -146,7 +146,7 @@ token e.g. '243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc'
   "Telegram Bot token"
     see https://core.telegram.org/bots/api#authorizing-your-bot
     see https://telegram.me/BotFather
-account e.g. 'evanxsummers'
+admin e.g. 'evanxsummers'
   "Authoritative Telegram username i.e. bootstrap admin user"
     see https://telegram.org
 hubRedis e.g. 'redis://localhost:6333'
@@ -160,7 +160,7 @@ domain='authdemo.webserva.com' \
 bot='ExAuthDemoBot' \
 secret='z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt' \
 token='243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc' \
-account='evanxsummers' \
+admin='evanxsummers' \
 hubRedis='redis://localhost:6333' \
 npm start
 ```
@@ -183,7 +183,7 @@ console.error([
   docker build -t authbot:test git@github.com:evanx/authbot.git
 ```
 The following shows sample run with the example config which you must edit for your environment
-i.e. with your own domain, account, bot name, token, secret etc:
+i.e. with your own domain, username, bot name, token, secret etc:
 ```javascript
   docker run -t authbot:test -d \
     -e domain='authdemo.webserva.com' \

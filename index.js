@@ -48,7 +48,7 @@ const configMeta = {
         info: 'https://core.telegram.org/bots/api#authorizing-your-bot',
         hint: 'https://telegram.me/BotFather'
     },
-    account: {
+    admin: {
         description: 'Authoritative Telegram username i.e. bootstrap admin user',
         example: 'evanxsummers',
         info: 'https://telegram.org'
@@ -150,12 +150,16 @@ if (configFile && process.env.NODE_ENV === 'development') {
     console.log([
         `Bot commands:`,
         ``,
-        `in - login to https://${config.domain}`,
-        `out - logout`,
-        `grant - [username role] grant role to user`,
+        `login - login to https://${config.domain}`,
+        `sessions - list your recent sessions`,
+        `logout - force logout your recent sessions`,
+        `grant - role to user`,
+        `revoke - role from user`,
+        `users - list users and their granted roles`,
         ``
     ].join('\n'));
 }
+
 
 const redis = require('redis');
 const client = redis.createClient(6379, config.redisHost);
@@ -208,7 +212,7 @@ async function start() {
         state.sub = redis.createClient(config.hubRedis);
         state.sub.on('message', (channel, message) => {
             logger.debug({channel, message});
-            handleMessage(JSON.parse(message));
+            handleTelegramMessage(JSON.parse(message));
         });
         state.sub.subscribe([config.hubNamespace, config.secret].join(':'));
     } else if (process.env.srcChannel) {
@@ -236,7 +240,7 @@ async function startHttpServer() {
             logger.debug('invalid', ctx.request.url);
         } else {
             logger.debug('webhook', typeof ctx.request.body, ctx.request.body);
-            await handleMessage(ctx.request.body);
+            await handleTelegramMessage(ctx.request.body);
         }
     });
     api.get('/authbot/in/:username/:token', async ctx => {
@@ -322,7 +326,7 @@ async function getSession(ctx) {
     if (!sessionId) {
         throw new Error('No cookie');
     }
-    const sessionKey = [config.namespace, 'session', sessionId].join(':');
+    const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
     const [session] = await multiExecAsync(client, multi => {
         multi.hgetall(sessionKey);
     });
@@ -348,13 +352,13 @@ async function handleAuth(ctx) {
 async function handleLogout(ctx) {
     const sessionId = ctx.cookies.get('sessionId');
     if (sessionId) {
-        const sessionKey = [config.namespace, 'session', sessionId].join(':');
+        const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
         const [session] = await multiExecAsync(client, multi => {
             multi.hgetall(sessionKey);
             multi.del(sessionKey);
         });
         if (session && session.username) {
-            const loginKey = [config.namespace, 'login', username].join(':');
+            const loginKey = [config.namespace, 'login', session.username, 'h'].join(':');
             await multiExecAsync(client, multi => {
                 multi.del(loginKey);
             });
@@ -372,11 +376,11 @@ async function handleLogin(ctx) {
         return;
     }
     const {username, token} = ctx.params;
-    const loginKey = [config.namespace, 'login', username].join(':');
+    const loginKey = [config.namespace, 'login', username, 'h'].join(':');
     const [login] = await multiExecAsync(client, multi => {
         multi.hgetall(loginKey);
     });
-    logger.debug('handleLogin', ua, loginKey, login);
+    logger.debug('handleLogin', {loginKey, login});
     if (!login) {
         const sessionId = ctx.cookies.get('sessionId');
         if (sessionId) {
@@ -388,17 +392,21 @@ async function handleLogin(ctx) {
     }
     assert.equal(login.username, username, 'username');
     const sessionId = [token, generateToken(16)].join('_');
-    const sessionKey = [config.namespace, 'session', sessionId].join(':');
+    const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
+    const sessionListKey = [config.namespace, 'session', username, 'l'].join(':');
+    const session = Object.assign({}, login, {started: Date.now()});
     const [hmset] = await multiExecAsync(client, multi => {
-        multi.hmset(sessionKey, {username});
+        multi.hmset(sessionKey, session);
         multi.expire(sessionKey, config.sessionExpire);
         multi.del(loginKey);
+        multi.lpush(sessionListKey, sessionId);
+        multi.ltrim(sessionListKey, 0, 5);
     });
     ctx.cookies.set('sessionId', sessionId, {maxAge: config.cookieExpire, domain: config.domain, path: '/'});
     ctx.redirect(config.redirectAuth);
 }
 
-async function handleMessage(message) {
+async function handleTelegramMessage(message) {
     const from = message.message.from;
     const request = {
         chatId: message.message.chat.id,
@@ -408,20 +416,29 @@ async function handleMessage(message) {
         timestamp: message.message.date
     };
     logger.debug('webhook', request, message.message);
-    handleTelegramLogin(request);
-}
-
-async function handleTelegramLogin(request) {
-    const match = request.text.match(/\/login$/);
-    if (!match) {
+    if (request.text === '/login') {
+        return handleTelegramLogin(request);
+    } else if (request.text === '/logout') {
+        return handleTelegramLogout(request);
+    } else if (request.text.startsWith('/sessions')) {
+        return handleTelegramListSessions(request);
+    } else if (request.text.startsWith('/users')) {
+        return handleTelegramListUsers(request);
+    } else if (request.text.startsWith('/grant')) {
+        return handleTelegramGrant(request);
+    } else if (request.text.startsWith('/revoke')) {
+        return handleTelegramRevoke(request);
+    } else {
         await sendTelegram(request.chatId, 'html', [
             `Try <code>/login</code>`
         ]);
-        return;
     }
+}
+
+async function handleTelegramLogin(request) {
     const {username, name, chatId} = request;
     const token = generateToken(10);
-    const loginKey = [config.namespace, 'login', username].join(':');
+    const loginKey = [config.namespace, 'login', username, 'h'].join(':');
     let [hmset] = await multiExecAsync(client, multi => {
         multi.hmset(loginKey, {token, username, name, chatId});
         multi.expire(loginKey, config.loginExpire);
@@ -429,13 +446,95 @@ async function handleTelegramLogin(request) {
     if (hmset) {
         await sendTelegramReply(request, 'html', [
             `You can login via https://${[config.domain, 'authbot', 'in', username, token].join('/')}.`,
-            `This link expires in ${config.loginExpire} seconds.`
+            `This link expires in ${config.loginExpire} seconds.`,
             `Powered by https://github.com/evanx/authbot.`
         ]);
     } else {
         await sendTelegramReply(request, 'html', [
             `Apologies, the login command failed.`,
         ]);
+    }
+}
+
+async function handleTelegramListSessions(request) {
+    const {username, name, chatId} = request;
+    const sessionListKey = [config.namespace, 'session', username, 'l'].join(':');
+    const [ids] = await multiExecAsync(client, multi => {
+        multi.lrange(sessionListKey, 0, 5);
+    });
+    await sendTelegramReply(request, 'html', [
+        `Okay, found ${username} sessions: ${ids.join(' ')}`,
+        `Oh apologies, this feature not yet implemented. Please check again from Monday 9th January.`
+    ]);
+}
+
+async function handleTelegramLogout(request) {
+    const {username, name, chatId} = request;
+    const sessionListKey = [config.namespace, 'session', username, 'l'].join(':');
+    const [ids] = await multiExecAsync(client, multi => {
+        multi.lrange(sessionListKey, 0, 5);
+    });
+    await sendTelegramReply(request, 'html', [
+        `Okay, found ${username} sessions: ${ids.join(' ')}`,
+        `Oh apologies, this feature not yet implemented. Please check again from Monday 9th January.`
+    ]);
+}
+
+async function handleTelegramGrant(request) {
+    const {username, name, chatId} = request;
+    if (username !== config.admin) {
+        await sendTelegramReply(request, 'html', [
+            `You are not the admin user, please ask ${config.admin}.`
+        ]);
+    } else {
+        const [role, user] = (/^\/grant ([a-z_]+) to ([a-z_]+)/.match(request.text) || []).slice(1);
+        if (!role) {
+            await sendTelegramReply(request, 'html', [
+                `Try /grant <tt>role<tt> to <tt>username</tt>`,
+                `e.g. grant <tt>admin</tt> role to another Telegram user`
+            ]);
+        } else {
+            await sendTelegramReply(request, 'html', [
+                `Okay, ${username} wishes to grant role ${role} to ${user}.`,
+                `Oh apologies, this feature not yet implemented. Please check again from Monday 9th January.`
+            ]);
+        }
+    }
+}
+
+async function handleTelegramListUsers(request) {
+    const {username, name, chatId} = request;
+    if (username !== config.admin) {
+        await sendTelegramReply(request, 'html', [
+            `You are not the admin user, please ask ${config.admin}.`
+        ]);
+    } else {
+        await sendTelegramReply(request, 'html', [
+            `You wish to list users and their roles.`,
+            `Oh apologies, this feature not yet implemented. Please check again from Monday 9th January.`
+        ]);
+    }
+}
+
+async function handleTelegramRevoke(request) {
+    const {username, name, chatId} = request;
+    if (username !== config.admin) {
+        await sendTelegramReply(request, 'html', [
+            `You are not the admin user, please ask ${config.admin}.`
+        ]);
+    } else {
+        const [role, user] = (/^\/revoke ([a-z_]+) from ([a-z_]+)/.match(request.text) || []).slice(1);
+        if (!user) {
+            await sendTelegramReply(request, 'html', [
+                `Try /revoke <tt>role<tt> from <tt>username</tt>`,
+                `e.g. revoke <tt>admin</tt> role from another Telegram user`
+            ]);
+        } else {
+            await sendTelegramReply(request, 'html', [
+                `Okay, ${username} wishes to revoke role ${role} from ${user}.`,
+                `Oh apologies, this feature not yet implemented. Please check again from Monday 9th January.`
+            ]);
+        }
     }
 }
 
