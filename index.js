@@ -254,7 +254,7 @@ async function startHttpServer() {
 function renderPage(ctx, content) {
     const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
     ? `tg://${config.bot}`
-    : `https://telegram.me/${config.bot}`;
+    : `https://web.telegram.org/#/im?p=@${config.bot}`;
     const botLink = `<a href="${botUrl}">${botUrl}</a>`;
     const paragraphs = content.paragraphs.map(p => p.replace('{botLink}', botLink));
     ctx.body = lodash.flatten([
