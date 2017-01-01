@@ -241,8 +241,7 @@ async function startHttpServer() {
         try {
             await next();
         } catch (err) {
-            ctx.body = err.message;
-            ctx.status = 500;
+            return handleError(ctx, err);
         }
     });
     app.use(api.routes());
@@ -250,6 +249,34 @@ async function startHttpServer() {
         ctx.status = 404;
     });
     state.server = app.listen(config.port);
+}
+
+function renderPage(ctx, content) {
+    const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
+    ? `tg://${config.bot}`
+    : `https://telegram.me/${config.bot}`;
+    const botLink = `<a href="${botUrl}">${botUrl}</a>`;
+    const paragraphs = page.paragraphs.map(p => p.replace('{botLink}', botLink));
+    ctx.body = lodash.flatten([
+        `<html>`,
+        `<head>`,
+        `  <title>AuthBot Demo</title>`,
+        `</head>`,
+        `<body>`,
+        `<h1>${page.heading}</h1>`,
+        paragraphs.map(p => `<p>${p}</p>`),
+        `</body>`,
+        `</html>`
+    ]).join('\n');
+}
+
+async function handleError(ctx, err) {
+    renderPage(ctx, {
+        heading: `Error: ${err.message}`,
+        paragraphs: [
+            `Use {botLink} to login`
+        ]
+    });
 }
 
 async function handleHome(ctx) {
