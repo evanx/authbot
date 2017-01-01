@@ -149,7 +149,6 @@ if (configFile && process.env.NODE_ENV === 'development') {
 }
 
 const redis = require('redis');
-const sub = redis.createClient(config.hubRedis);
 const client = redis.createClient(6379, config.redisHost);
 
 assert(process.env.NODE_ENV);
@@ -194,11 +193,12 @@ async function startProduction() {
 async function start() {
     if (config.hubRedis) {
         assert(config.hubNamespace);
-        sub.on('message', (channel, message) => {
+        state.sub = redis.createClient(config.hubRedis);
+        state.sub.on('message', (channel, message) => {
             logger.debug({channel, message});
             handleMessage(JSON.parse(message));
         });
-        sub.subscribe([config.hubNamespace, config.secret].join(':'));
+        state.sub.subscribe([config.hubNamespace, config.secret].join(':'));
     }
     return startHttpServer();
 }
@@ -360,5 +360,7 @@ async function sendTelegram(chatId, format, ...content) {
 }
 
 async function end() {
-    sub.quit();
+    if (state.sub) {
+        state.sub.quit();
+    }
 }
