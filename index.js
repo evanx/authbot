@@ -233,6 +233,9 @@ async function startHttpServer() {
     api.get('/noauth', async ctx => {
         await handleNoAuth(ctx);
     });
+    api.get('/', async ctx => {
+        await handleHome(ctx);
+    });
     app.use(bodyParser());
     app.use(api.routes());
     app.use(async ctx => {
@@ -241,25 +244,46 @@ async function startHttpServer() {
     state.server = app.listen(config.port);
 }
 
+async function handleHome(ctx) {
+    const name = ctx.cookies.get('sessionId');
+    ctx.body = [
+        `<html>`,
+        `<head>`,
+        `  <title>AuthBot Demo</title>`,
+        `</head>`,
+        `<body>`,
+        `<h1>Welcome</h1>`,
+        `<p><a href='https://telegram.me/${config.name}'>${config.name}</a></p>`,
+        `</body>`,
+        `</html>`
+    ].join('\n');
+}
+
 async function handleAuth(ctx) {
     const name = ctx.cookies.get('sessionId');
-    ctx.body = ```<html>
-        <head>
-        </head>
-        <body>
-        <h1>Hello ${name}</h1>
-        </body>
-    </html>```.replaceAll(/\n\s+/, '\n');
+    ctx.body = [
+        `<html>`,
+        `<head>`,
+        `  <title>AuthBot Demo</title>`,
+        `</head>`,
+        `<body>`,
+        `<h1>Hello ${name}</h1>`,
+        `</body>`,
+        `</html>`
+    ].join('\n');
 }
 
 async function handleNoAuth(ctx) {
-    ctx.body = ```<html>
-        <head>
-        </head>
-        <body>
-        <h1>Auth failed</h1>
-        </body>
-    </html>```.replaceAll(/\n\s+/, '\n');
+    ctx.body = [
+        `<html>`,
+        `<head>`,
+        `  <title>AuthBot Demo</title>`,
+        `</head>`,
+        `<body>`,
+        `<h1>No Auth</h1>`,
+        `</body>`,
+        `</html>`
+    ].join('\n');
 }
 
 async function handleLogout(ctx) {
