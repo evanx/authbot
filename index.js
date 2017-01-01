@@ -318,7 +318,7 @@ async function handleLogin(ctx) {
     });
     logger.debug('handleLogin', ua, loginKey, login);
     if (!login) {
-        const sessionId = ctx.cookies.get('sessionId', sessionId);
+        const sessionId = ctx.cookies.get('sessionId');
         if (sessionId) {
             logger.debug('handleLogin', {sessionId}, state.redirectNoAuth);
         }
