@@ -209,6 +209,7 @@ async function startHttpServer() {
         if (ctx.params.secret !== config.secret) {
             logger.debug('invalid', ctx.request.url);
         } else {
+            logger.debug('webhook', typeof ctx.request.body, ctx.request.body);
             await handleMessage(ctx.request.body);
         }
     });
