@@ -295,6 +295,7 @@ address=`
 ## Live update
 
 In a development environment on the cloud interacting with a test bot, it is useful to push updated code. For example, we use `inotifywait` on a Linux workstation to watch `index.js`
+```shell
 while true
 do
   inotifywait index.js -qe close_write
