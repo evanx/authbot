@@ -146,6 +146,14 @@ if (configFile && process.env.NODE_ENV === 'development') {
         ...Object.keys(config).map(key => `${key}=${config[key]}`),
         'npm run development'
     ].join(' '));
+    console.log([
+        `Bot commands:`,
+        ``,
+        `in - login to https://${config.domain}`,
+        `out - logout`,
+        `grant - [username role] grant role to user`,
+        ``
+    ].join('\n'));
 }
 
 const redis = require('redis');

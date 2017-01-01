@@ -1,0 +1,3 @@
+in - login 
+out - logout
+grant username role - grant role to user
