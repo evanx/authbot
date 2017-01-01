@@ -223,7 +223,7 @@ async function start() {
             });
         });
         state.sub.subscribe(process.env.srcChannel);
-        logger.info('srcChannel', process.env.srcChannel);
+        logger.info('src', process.env.srcChannel);
     }
     return startHttpServer();
 }
@@ -266,6 +266,7 @@ async function startHttpServer() {
         ctx.status = 404;
     });
     state.server = app.listen(config.port);
+    logger.info('http', config.port);
 }
 
 function renderPage(ctx, content) {
