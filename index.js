@@ -283,6 +283,10 @@ async function handleAuth(ctx) {
     if (!session) {
         throw new Error('Session expired');
     }
+    const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
+    ? `tg://${config.bot}`
+    : `https://telegram.me/${config.bot}`;
+    const botLink = `<a href="${botUrl}">${botUrl}</a>`;
     ctx.body = [
         `<html>`,
         `<head>`,
