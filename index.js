@@ -271,6 +271,7 @@ function renderPage(ctx, content) {
 }
 
 async function handleError(ctx, err) {
+    logger.debug('handleError', err);
     renderPage(ctx, {
         heading: `Error: ${err.message}`,
         paragraphs: [
