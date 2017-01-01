@@ -5,8 +5,10 @@ pid=''
 
 while true  
 do
-  redis-cli brpop 'authbot:index.js' > tmp/index.js
-  if head -1 tmp/index.js | grep -q '^const'
+  redis-cli brpop 'authbot:index.js' 10 | tail -n +2 > tmp/index.js
+  wc tmp/index.js
+  head tmp/index.js 
+  if head -1 tmp/index.js | grep '^const'
   then
     if [ -n "$pid" ]
     then
@@ -20,5 +22,7 @@ do
     sleep 1
     ps aux | grep authbot.production | grep debug 
     redis-cli hgetall 'authbot:started'
+    rpid=`redis-cli hget 'authbot:started' pid`
+    echo "rpid $pid"
   fi
 done
