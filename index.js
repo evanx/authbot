@@ -253,7 +253,7 @@ async function handleHome(ctx) {
         `</head>`,
         `<body>`,
         `<h1>Welcome</h1>`,
-        `<p><a href='https://telegram.me/${config.bot}'>${config.bot}</a></p>`,
+        `<p><a href='https://telegram.me/${config.bot}'>Use https://telegram.me/${config.bot} to login</a></p>`,
         `</body>`,
         `</html>`
     ].join('\n');
