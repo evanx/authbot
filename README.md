@@ -229,7 +229,7 @@ cat /etc/issue
 - `Ubuntu 16.04.1 LTS`
 - `Amazon Linux AMI release 2016.09`
 
-### Build application container
+## Build application container
 
 Let's build our application container:
 ```shell
