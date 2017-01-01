@@ -319,7 +319,7 @@ done
 ```
 where updates published via Redis will cause the script to exit and re-execute.
 
-The app subscribes to `srcChannel`
+The app can subscribe to `srcChannel`
 ```javascript
 logger.info('src', process.env.srcChannel);
 assert(process.env.srcFile, 'srcFile');
