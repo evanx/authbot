@@ -274,17 +274,31 @@ address=`
 
 ## Live update
 
-In a development environment on the cloud interacting with a test bot, it is sometimes useful to push code that is being updated. For example, we use `inotifywait` on Linux workstation to publish an updated `index.js` via `redis-cli` as follows:
-```shell
+In a development environment on the cloud interacting with a test bot, it is useful to push updated code. For example, we use `inotifywait` on a Linux workstation to watch `index.js`
 while true
 do
   inotifywait index.js -qe close_write
   cat index.js | redis-cli -x -p 6333 publish 'authbot:src'
 done
 ```
-where port `6333` is forwarded by `ssh -L6333:localhost:6379` to a remote cloud box.
+where we publish the updated script via Redis. For example, port `6333` is forwarded by `ssh -L6333:localhost:6379` to a remote cloud box.
 
-The app subscribes to `srcChannel` i.e. `authbot:src`
+Then on the cloud box we run as follows:
+```shell
+git pull
+cp index.js tmp/
+while true
+do
+  srcChannel=authbot:src \
+  srcFile=tmp/index.js \
+  configFile=~/demo-config-authbot/test.js \
+  loggerLevel=debug \
+  node --harmony-async-await tmp/index.js
+done
+```
+where updates published via Redis will cause the script to exit and re-execute.
+
+The app subscribes to `srcChannel`
 ```javascript
 logger.info('src', process.env.srcChannel);
 assert(process.env.srcFile, 'srcFile');
@@ -300,21 +314,6 @@ state.sub.on('message', (channel, message) => {
 });
 state.sub.subscribe(process.env.srcChannel);
 ```
-where we write the updated script to `tmp/index.js` and exit.
-
-Then on the cloud box we run as follows:
-```shell
-git pull
-cp index.js tmp/
-while true
-do
-  srcChannel=authbot:src \
-  srcFile=tmp/index.js \
-  configFile=~/demo-config-authbot/test.js \
-  loggerLevel=debug \
-  node --harmony-async-await tmp/index.js
-done
-```
-where updates published via Redis cause the script to exit and re-execute.
+where we write the updated script to `srcFile` e.g. `tmp/index.js` and exit.
 
 Note that the service is down for a few seconds. As such, this feature is not suitable for production usage.
