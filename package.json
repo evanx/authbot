@@ -1,13 +1,13 @@
 {
   "name": "authbot",
   "version": "0.0.1",
-  "description": "Subscribe to Redis channel and push messages to a Redis list",
+  "description": "A service to enable web auth and login to a custom domain facilitated via a Telegram bot.",
   "main": "index.js",
   "scripts": {
     "lint": "eslint --cache src",
-    "development": "NODE_ENV=development node --harmony-async-await src/index.js",
-    "test": "NODE_ENV=test node --harmony-async-await src/index.js",
-    "start": "node --harmony-async-await src/index.js"
+    "development": "NODE_ENV=development node --harmony-async-await index.js",
+    "test": "NODE_ENV=test node --harmony-async-await index.js",
+    "start": "node --harmony-async-await index.js"
   },
   "author": "Evan Summers",
   "license": "ISC",
@@ -19,12 +19,9 @@
     "lodash": "^4.17.2",
     "node-fetch": "^1.6.3",
     "redis": "^2.6.3",
-    "thirty-two": "^1.0.2",
     "winston": "^2.3.0"
   },
   "devDependencies": {
-    "babel-cli": "^6.18.0",
-    "babel-preset-es2017": "^6.16.0",
     "eslint": "^3.12.2"
   },
   "repository": {
