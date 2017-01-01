@@ -212,6 +212,7 @@ async function start() {
         });
         state.sub.subscribe([config.hubNamespace, config.secret].join(':'));
     } else if (process.env.srcChannel) {
+        logger.info('src', process.env.srcChannel);
         assert(process.env.srcFile, 'srcFile');
         state.sub = redis.createClient();
         state.sub.on('message', (channel, message) => {
@@ -224,7 +225,6 @@ async function start() {
             });
         });
         state.sub.subscribe(process.env.srcChannel);
-        logger.info('src', process.env.srcChannel);
     }
     return startHttpServer();
 }
@@ -412,10 +412,10 @@ async function handleMessage(message) {
 }
 
 async function handleTelegramLogin(request) {
-    const match = request.text.match(/\/in$/);
+    const match = request.text.match(/\/login$/);
     if (!match) {
         await sendTelegram(request.chatId, 'html', [
-            `Try <code>/in</code>`
+            `Try <code>/login</code>`
         ]);
         return;
     }
@@ -430,6 +430,7 @@ async function handleTelegramLogin(request) {
         await sendTelegramReply(request, 'html', [
             `You can login via https://${[config.domain, 'authbot', 'in', username, token].join('/')}.`,
             `This link expires in ${config.loginExpire} seconds.`
+            `Powered by https://github.com/evanx/authbot.`
         ]);
     } else {
         await sendTelegramReply(request, 'html', [
