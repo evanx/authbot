@@ -226,7 +226,6 @@ async function start() {
         state.sub.subscribe(process.env.srcChannel);
         logger.info('src', process.env.srcChannel);
     }
-
     return startHttpServer();
 }
 
