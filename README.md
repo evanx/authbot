@@ -9,16 +9,16 @@ A service to enable web auth and login to a custom domain facilitated via a Tele
 - as a user send your bot the command `/in`
 - your authbot will reply with a magic login link to itself e.g. `/authbot/in/${user}/${token}`
 - the authbot HTTP handler will enroll the session in Redis
-- the authbot will redirect e.g. `/home` for your actual site, with the session cookie set
+- the authbot will redirect e.g. `/auth` for your actual site, with the session cookie set
 - your site can verify the session cookie via Redis and get the Telegram username and role
 - the original authoritative (admin) Telegram username can authorise other users
 
 This provides a relatively easy way to provide authentication and authorisation for any domain:
 - no signup required, just use Telegram
+- no email verification required, as you have the authentic Telegram username
 - works great on mobile, use the Telegram app
 - works great on desktop, use https://web.telegram.org
-- no email verification required, as you have the authentic Telegram username
-- minimal code required, just verify that the session token in the cookie matches that in Redis
+- minimal code required, just verify the session cookie via Redis
 
 ## Implementation
 
@@ -75,7 +75,7 @@ const configMeta = {
         example: 'authdemo.webserva.com'
     },
     bot: {
-        description: 'Telegram Bot name',
+        description: 'Telegram Bot name i.e. this authbot',
         example: 'ExAuthDemoBot',
         info: 'https://core.telegram.org/bots/api',
         hint: 'https://telegram.me/BotFather'
@@ -93,13 +93,13 @@ const configMeta = {
         hint: 'https://telegram.me/BotFather'
     },
     account: {
-        description: 'Authoritative Telegram username',
+        description: 'Authoritative Telegram username i.e. bootstrap admin user',
         example: 'evanxsummers',
         info: 'https://telegram.org'
     },
-    telebotRedis: {
+    hubRedis: {
         required: false,
-        description: 'Remote redis for incoming bot messages, especially for development',
+        description: 'Remote redis for bot messages, especially for development',
         example: 'redis://localhost:6333',
         info: 'https://github.com/evanx/webhook-push'
     }
@@ -108,7 +108,7 @@ const configMeta = {
 
 The `config` is populated from environment variables as follows:
 ```javascript
-const configFile = (!process.env.configFile? null: require(process.env.configFile));
+const configKeys = [];
 const missingConfigKeys = [];
 const config = Object.keys(configMeta)
 .concat(Object.keys(configDefault))
@@ -116,8 +116,10 @@ const config = Object.keys(configMeta)
     if (process.env[key]) {
         assert(process.env[key] !== '', key);
         config[key] = process.env[key];
+        configKeys.push(key);
     } else if (configFile && configFile[key]) {
         config[key] = configFile[key];
+        configKeys.push(key);
     } else if (!configDefault[key] && configMeta[key].required !== false) {
         missingConfigKeys.push(key);
     }
@@ -133,7 +135,7 @@ If we start the service with missing config via environment variables, the follo
 domain e.g. 'authdemo.webserva.com'
   "HTTPS web domain to auth access"
 bot e.g. 'ExAuthDemoBot'
-  "Telegram Bot name"
+  "Telegram Bot name i.e. this authbot"
     see https://core.telegram.org/bots/api
     see https://telegram.me/BotFather  
 secret e.g. 'z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt'
@@ -145,10 +147,10 @@ token e.g. '243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc'
     see https://core.telegram.org/bots/api#authorizing-your-bot
     see https://telegram.me/BotFather
 account e.g. 'evanxsummers'
-  "Authoritative Telegram username"
+  "Authoritative Telegram username i.e. bootstrap admin user"
     see https://telegram.org
-telebotRedis e.g. 'redis://localhost:6333'
-  "Remote redis for bot messages, especially for development"
+hubRedis e.g. 'redis://localhost:6333'
+  "Remote hub for bot messages via Redis, especially for development"
     see https://github.com/evanx/webhook-push
 ```
 
@@ -159,7 +161,7 @@ bot='ExAuthDemoBot' \
 secret='z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt' \
 token='243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc' \
 account='evanxsummers' \
-telebotRedis='redis://localhost:6333' \
+hubRedis='redis://localhost:6333' \
 npm start
 ```
 where this help is generated from `configMeta`
@@ -178,18 +180,18 @@ console.error([
 
 `npm start` with missing configs will print help including for Docker build and run:
 ```javascript
-  docker build -t telegrambot-auth:test git@github.com:evanx/telegrambot-auth.git
+  docker build -t authbot:test git@github.com:evanx/authbot.git
 ```
 The following shows sample run with the example config which you must edit for your environment
 i.e. with your own domain, account, bot name, token, secret etc:
 ```javascript
-  docker run -t telegrambot-auth:test -d \
+  docker run -t authbot:test -d \
     -e domain='authdemo.webserva.com' \
     -e bot='ExAuthDemoBot' \
     -e secret='z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt' \
     -e token='243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc' \
     -e account='evanxsummers' \
-    telegrambot-auth-test
+    authbot-test
 ```
 
 ## Docker notes
@@ -211,9 +213,9 @@ cat /etc/issue
 
 Let's build our application container:
 ```shell
-docker build -t telegrambot-auth:test https://github.com/evanx/telegrambot-auth.git
+docker build -t authbot:test https://github.com/evanx/authbot.git
 ```
-where the image is named and tagged as `telegrambot-auth:test`
+where the image is named and tagged as `authbot:test`
 
 Notce that the default `Dockerfile` is as follows:
 ```
@@ -246,25 +248,26 @@ which we check that set e.g. to `172.18.0.2`
 
 Finally we run our service container:
 ```shell
-docker run --network=redis --name telegrambot-auth-test \
-  -e NODE_ENV=test -e redisHost=$redisHost -e subscribeChannel=logger:mylogger -d telegrambot-auth:test
+docker run --network=redis --name authbot-test -d -p 8080 \
+  -e NODE_ENV=test \
+  -e redisHost=$redisHost \
+  -e domain='' \
+  -e bot='' \
+  -e secret='' \
+  -e token='' \
+  -e account='' \  
+  authbot:test
 ```
 where we configure `redisHost` as the `redis-login` container.
 
 Note that we:
 - use the `redis` isolated network bridge for the `redis-login` container
-- name this container `telegrambot-auth-test`
-- use the previously built image `telegrambot-auth:test`
+- name this container `authbot-test`
+- use the previously built image `authbot:test`
 
 Get its IP address:
 ```
 address=`
-  docker inspect --format '{{ .NetworkSettings.Networks.redis.IPAddress }}' telegrambot-auth-test
+  docker inspect --format '{{ .NetworkSettings.Networks.redis.IPAddress }}' authbot-test
 `
-```
-
-Print and curl its URL:
-```
-echo "http://$address:8080"
-curl -s $address:8080 | python -mjson.tool
 ```

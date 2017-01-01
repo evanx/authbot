@@ -1,5 +1,4 @@
 const assert = require('assert');
-const base32 = require('thirty-two');
 const crypto = require('crypto');
 const fetch = require('node-fetch');
 const lodash = require('lodash');
@@ -49,12 +48,12 @@ const configMeta = {
         hint: 'https://telegram.me/BotFather'
     },
     account: {
-        description: 'Authoritative Telegram username',
+        description: 'Authoritative Telegram username i.e. bootstrap admin user',
         example: 'evanxsummers',
         info: 'https://telegram.org'
     },
-    telebotRedis: {
-        description: 'Remote redis for bot messages, especially for development',
+    hubRedis: {
+        description: 'Remote hub for bot messages via Redis, especially for development',
         example: 'redis://localhost:6333',
         info: 'https://github.com/evanx/webhook-push'
     }
@@ -86,13 +85,13 @@ if (missingConfigKeys.length) {
         const meta = configMeta[key];
         const lines = [`${sp}${key} e.g. '${meta.example}'`];
         if (meta.description) {
-            lines.push(`${sp}"${meta.description}"`);
+            lines.push(`${sp+sp}"${meta.description}"`);
         }
         if (meta.info) {
-            lines.push(`${sp}see ${meta.info}`);
+            lines.push(`${sp+sp+sp}see ${meta.info}`);
         }
         if (meta.hint) {
-            lines.push(`${sp}see ${meta.hint}`);
+            lines.push(`${sp+sp+sp}see ${meta.hint}`);
         }
         return lines;
     })).join('\n'));
@@ -109,7 +108,7 @@ if (missingConfigKeys.length) {
     ].join('\n'));
     console.error('\nTest Docker build:');
     console.error([
-        `${sp}docker build -t telegrambot-auth:test git@github.com:evanx/telegrambot-auth.git`
+        `${sp}docker build -t authbot:test git@github.com:evanx/authbot.git`
     ].join('\n'));
     console.error('\nExample Docker run:');
     console.error([
@@ -133,15 +132,15 @@ state.botUrl = `https://api.telegram.org/bot${config.token}`;
 
 if (configFile && process.env.NODE_ENV === 'development') {
     [
-        `https://${configFile.webhookDomain}/webhook/${config.secret}`,
+        `https://${configFile.hubDomain}/webhook/${config.secret}`,
         `https://${config.domain}/authbot/webhook/${config.secret}`
     ].forEach(webhookUrl => {
         const apiUrl = `${state.botUrl}/setWebhook?url=${encodeURI(webhookUrl)}`;
         console.log(`curl '${apiUrl}' | jq '.'`);
     });
-    console.log(`\nssh -L${configFile.forwardedPort}:127.0.0.1:6379 ${configFile.remoteHost}`);
-    const subscribeChannel = [configFile.remoteNamespace, config.secret].join(':');
-    console.log(`\nredis-cli -p ${configFile.forwardedPort} subscribe "${subscribeChannel}"\n`);
+    console.log(`\nssh -L${configFile.hubLocalPort}:127.0.0.1:6379 ${configFile.hubHost}`);
+    const subscribeChannel = [configFile.hubNamespace, config.secret].join(':');
+    console.log(`\nredis-cli -p ${configFile.hubLocalPort} subscribe "${subscribeChannel}"\n`);
     console.log([
         ...Object.keys(config).map(key => `${key}=${config[key]}`),
         'npm run development'
@@ -149,7 +148,7 @@ if (configFile && process.env.NODE_ENV === 'development') {
 }
 
 const redis = require('redis');
-const sub = redis.createClient(config.telebotRedis);
+const sub = redis.createClient(config.hubRedis);
 const client = redis.createClient(6379, config.redisHost);
 
 assert(process.env.NODE_ENV);
@@ -169,7 +168,7 @@ function generateToken(length = 16) {
 (async function() {
     state.started = Math.floor(Date.now()/1000);
     state.pid = process.pid;
-    logger.info('start', {config, state});
+    logger.info('start', JSON.stringify({config, state}, null, 2));
     if (process.env.NODE_ENV === 'development') {
         return startDevelopment();
     } else if (process.env.NODE_ENV === 'test') {
@@ -201,20 +200,19 @@ async function start() {
 }
 
 async function startHttpServer() {
-    api.post('/webhook/*', async ctx => {
+    api.post('/authbot/webhook/:secret', async ctx => {
         ctx.body = '';
-        const id = ctx.params[0];
-        if (id !== config.secret) {
+        if (ctx.params.secret !== config.secret) {
             logger.debug('invalid', ctx.request.url);
         } else {
             await handleMessage(ctx.request.body);
         }
     });
-    api.get('/login/:username/:token', async ctx => {
-        await handleLogin(ctx);
+    api.get('/authbot/in/:username/:token', async ctx => {
+        await handleIn(ctx);
     });
-    api.get('/logout/:username', async ctx => {
-        await handleLogout(ctx);
+    api.get('/authbot/out', async ctx => {
+        await handleOut(ctx);
     });
     app.use(api.routes());
     app.use(async ctx => {
@@ -223,36 +221,55 @@ async function startHttpServer() {
     state.server = app.listen(config.port);
 }
 
-async function handleLogout(ctx) {
+async function handleOut(ctx) {
+    const sessionId = ctx.cookies.get('sessionId', sessionId);
+    if (sessionId) {
+        const sessionKey = [config.namespace, 'session', sessionId].join(':');
+        const [session] = await multiExecAsync(client, multi => {
+            multi.hgetall(sessionKey);
+            multi.del(sessionKey);
+        });
+        if (session && session.username) {
+            await multiExecAsync(client, multi => {
+                multi.del(loginKey);
+            });
+        }
+        ctx.cookies.set('sessionId', '', {expires: new Date(0), domain: config.domain, path: '/'});
+    }
+    ctx.redirect(config.redirectNoAuth);
 }
 
-async function handleLogin(ctx) {
+async function handleIn(ctx) {
     const ua = ctx.get('User-Agent');
-    logger.debug('handleLogin', ua);
+    logger.debug('handleIn', ua);
     if (ua.startsWith('TelegramBot')) {
         ctx.status = 403;
         return;
     }
     const {username, token} = ctx.params;
-    const loginKey = [config.namespace, 'login', token].join(':');
-    const [hgetall] = await multiExecAsync(client, multi => {
+    const loginKey = [config.namespace, 'login', username].join(':');
+    const [login] = await multiExecAsync(client, multi => {
         multi.hgetall(loginKey);
     });
-    logger.debug('login', ua, loginKey, hgetall);
-    if (!hgetall) {
+    logger.debug('handleIn', ua, loginKey, login);
+    if (!login) {
+        const sessionId = ctx.cookies.get('sessionId', sessionId);
+        if (sessionId) {
+            logger.debug('handleIn', {sessionId}, state.redirectNoAuth);
+        }
         ctx.status = 403;
         ctx.redirect(state.redirectNoAuth);
         return;
     }
-    assert.equal(hgetall.username, username, 'id');
+    assert.equal(login.username, username, 'username');
     const sessionId = [token, generateToken(16)].join('_');
-    const sessionRedisKey = [config.namespace, 'session', sessionId].join(':');
+    const sessionKey = [config.namespace, 'session', sessionId].join(':');
     const [hmset] = await multiExecAsync(client, multi => {
-        multi.hmset(sessionRedisKey, {username});
-        multi.expire(sessionRedisKey, config.sessionExpire);
+        multi.hmset(sessionKey, {username});
+        multi.expire(sessionKey, config.sessionExpire);
         multi.del(loginKey);
     });
-    ctx.cookie('sessionId', sessionId, {maxAge: config.cookieExpire, domain: config.domain});
+    ctx.cookies.set('sessionId', sessionId, {maxAge: config.cookieExpire, domain: config.domain, path: '/'});
     ctx.redirect(config.redirectAuth);
 }
 
@@ -269,25 +286,25 @@ async function handleMessage(message) {
     handleTelegramLogin(request);
 }
 
-async function handleTelegramLogin(request) {
-    const match = request.text.match(/\/login$/);
+async function handleTelegramIn(request) {
+    const match = request.text.match(/\/in$/);
     if (!match) {
         await sendTelegram(request.chatId, 'html', [
-            `Try <code>/login</code>`
+            `Try <code>/in</code>`
         ]);
         return;
     }
     const username = request.username;
-    const token = generateToken(8);
-    const loginKey = [config.namespace, 'login', token].join(':');
+    const token = generateToken(10);
+    const loginKey = [config.namespace, 'login', username].join(':');
     let [hmset] = await multiExecAsync(client, multi => {
-        multi.hmset(loginKey, {username});
+        multi.hmset(loginKey, {token, username});
         multi.expire(loginKey, config.loginExpire);
     });
     if (hmset) {
         await sendTelegramReply(request, 'html', [
-            `You can login via https://${[config.domain, 'login', username, token].join('/')}.`,
-            `This login expires in ${config.loginExpire} seconds`
+            `You can login via https://${[config.domain, 'in', username, token].join('/')}.`,
+            `This link expires in ${config.loginExpire} seconds.`
         ]);
     } else {
         await sendTelegramReply(request, 'html', [
@@ -321,10 +338,11 @@ async function sendTelegram(chatId, format, ...content) {
         }
         uri += `&text=${encodeURIComponent(text)}`;
         const url = [state.botUrl, uri].join('/');
-        logger.info('sendTelegram url', url, chatId, format, text);
-        const res = await fetch(url, {timeout: config.sendTimeout});
+        const options = {timeout: config.sendTimeout};
+        logger.info('sendTelegram url', url, {options});
+        const res = await fetch(url, options);
         if (res.status !== 200) {
-            logger.warn('sendTelegram', chatId, url);
+            logger.warn('sendTelegram status', res.status, {chatId, url});
         }
     } catch (err) {
         logger.error(err);
