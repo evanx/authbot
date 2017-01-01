@@ -36,7 +36,7 @@ async function startHttpServer() {
     api.get('/authbot/in/:username/:token', async ctx => {
         await handleIn(ctx);
     });
-    api.get('/authbot/out', async ctx => {
+    api.get('/authbot/logout', async ctx => {
         await handleOut(ctx);
     });
     app.use(api.routes());
@@ -46,6 +46,20 @@ async function startHttpServer() {
     state.server = app.listen(config.port);
 }
 ```
+
+For demo purposes we also serve the following pages, which would ordinarily be served by the app:
+```javascript
+api.get('/', async ctx => {
+    await handleHome(ctx);
+});
+api.get('/auth', async ctx => { // authentication succeeded
+    await handleAuth(ctx);
+});
+api.get('/noauth', async ctx => { // authentication failed
+    await handleNoAuth(ctx);
+});
+```
+where `/auth` and `/noauth` are redirects from `/authbot/in`
 
 ## Config
 

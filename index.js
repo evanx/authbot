@@ -388,7 +388,10 @@ async function handleLogin(ctx) {
             logger.debug('handleLogin', {sessionId}, state.redirectNoAuth);
         }
         ctx.status = 403;
-        ctx.redirect(state.redirectNoAuth);
+        const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
+        ? `tg://${config.bot}`
+        : `https://web.telegram.org/#/im?p=@${config.bot}`;
+        ctx.redirect(botUrl);
         return;
     }
     assert.equal(login.username, username, 'username');
