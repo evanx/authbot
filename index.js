@@ -220,10 +220,10 @@ async function startHttpServer() {
         await handleLogout(ctx);
     });
     api.get('/auth', async ctx => {
-        ctx.body = ctx.request.url;
+        await handleAuth(ctx);
     });
     api.get('/noauth', async ctx => {
-        ctx.body = ctx.request.url;
+        await handleNoAuth(ctx);
     });
     app.use(bodyParser());
     app.use(api.routes());
@@ -231,6 +231,27 @@ async function startHttpServer() {
         ctx.status = 404;
     });
     state.server = app.listen(config.port);
+}
+
+async function handleAuth(ctx) {
+    const name = ctx.cookies.get('sessionId');
+    ctx.body = ```<html>
+        <head>
+        </head>
+        <body>
+        <h1>Hello ${name}</h1>
+        </body>
+    </html>```.replaceAll(/\n\s+/, '\n');
+}
+
+async function handleNoAuth(ctx) {
+    ctx.body = ```<html>
+        <head>
+        </head>
+        <body>
+        <h1>Auth failed</h1>
+        </body>
+    </html>```.replaceAll(/\n\s+/, '\n');
 }
 
 async function handleLogout(ctx) {
