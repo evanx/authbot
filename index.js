@@ -256,14 +256,14 @@ function renderPage(ctx, content) {
     ? `tg://${config.bot}`
     : `https://telegram.me/${config.bot}`;
     const botLink = `<a href="${botUrl}">${botUrl}</a>`;
-    const paragraphs = page.paragraphs.map(p => p.replace('{botLink}', botLink));
+    const paragraphs = content.paragraphs.map(p => p.replace('{botLink}', botLink));
     ctx.body = lodash.flatten([
         `<html>`,
         `<head>`,
         `  <title>AuthBot Demo</title>`,
         `</head>`,
         `<body>`,
-        `<h1>${page.heading}</h1>`,
+        `<h1>${content.heading}</h1>`,
         paragraphs.map(p => `<p>${p}</p>`),
         `</body>`,
         `</html>`
