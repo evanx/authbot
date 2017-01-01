@@ -14,6 +14,7 @@ A service to enable web auth and login to a custom domain facilitated via a Tele
 - the original authoritative (admin) Telegram username can authorise other users
 
 ![screenshot](https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-bot.png)  
+<hr>
 
 This provides a relatively easy way to provide authentication and authorisation for any domain:
 - no signup required, just use Telegram
@@ -23,6 +24,7 @@ This provides a relatively easy way to provide authentication and authorisation 
 - minimal code required, just verify the session cookie via Redis
 
 ![screenshot](https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-page-auth.png)
+<hr>
 
 ## Implementation
 
