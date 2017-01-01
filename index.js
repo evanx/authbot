@@ -173,6 +173,7 @@ function generateToken(length = 16) {
     return crypto.randomBytes(length).map(value => charset.charCodeAt(Math.floor(value * charset.length / 256))).toString();
 }
 
+
 (async function() {
     state.started = Math.floor(Date.now()/1000);
     state.pid = process.pid;
