@@ -225,6 +225,7 @@ async function startHttpServer() {
     api.get('/noauth', async ctx => {
         ctx.body = ctx.request.url;
     });
+    app.use(bodyParser());
     app.use(api.routes());
     app.use(async ctx => {
         ctx.status = 404;
