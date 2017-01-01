@@ -177,6 +177,9 @@ function generateToken(length = 16) {
     state.started = Math.floor(Date.now()/1000);
     state.pid = process.pid;
     logger.info('start', JSON.stringify({config, state}, null, 2));
+    multiExecAsync(client, multi => {
+        multi.hmset([config.namespace, 'started'].join(':'), state);
+    });
     if (process.env.NODE_ENV === 'development') {
         return startDevelopment();
     } else if (process.env.NODE_ENV === 'test') {
