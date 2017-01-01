@@ -205,13 +205,16 @@ console.error([
 The following shows sample run with the example config which you must edit for your environment
 i.e. with your own domain, username, bot name, token, secret etc:
 ```javascript
-  docker run -t authbot:test -d \
+  docker run \
+    --name authbot-test -d \
+    --network host \
+    -e NODE_ENV=test \
     -e domain='authdemo.webserva.com' \
     -e bot='ExAuthDemoBot' \
     -e secret='z7WnDUfuhtDCBjX54Ks5vB4SAdGmdzwRVlGQjWBt' \
     -e token='243751977:AAH-WYXgsiZ8XqbzcqME7v6mUALxjktvrQc' \
-    -e account='evanxsummers' \
-    authbot-test
+    -e admin='evanxsummers' \
+    authbot:test
 ```
 
 ## Docker notes
@@ -237,14 +240,15 @@ docker build -t authbot:test https://github.com/evanx/authbot.git
 ```
 where the image is named and tagged as `authbot:test`
 
-Notce that the default `Dockerfile` is as follows:
+Notice that the default `Dockerfile` is as follows:
 ```
 FROM mhart/alpine-node
-ADD . .
+ADD package.json .
 RUN npm install
-ENV port 80
-EXPOSE 80
-CMD ["node", "build/index.js"]
+ADD index.js .
+ENV port 8080
+EXPOSE 8080
+CMD ["node", "--harmony-async-await", "index.js"]
 ```
 
 ## Isolated Redis container and network
@@ -275,7 +279,7 @@ docker run --network=redis --name authbot-test -d -p 8080 \
   -e bot='' \
   -e secret='' \
   -e token='' \
-  -e account='' \  
+  -e admin='' \  
   authbot:test
 ```
 where we configure `redisHost` as the `redis-login` container.
