@@ -344,7 +344,8 @@ async function handleAuth(ctx) {
         paragraphs: [
             `Logout to clear the session and cookie via <a href="/authbot/logout">/authbot/logout</a>`,
             `You can also logout by sending <tt>/out</tt> command to {botLink}.`,
-            `Incidently, your session ID is ${session.sessionId}. (This is set via cookie, and verified.)`,
+            `Incidently, your session ID is set via cookie on this domain, and can be validated ` +
+            `against the Redis storage used by this AuthBot.`
         ]
     });
 }
@@ -437,7 +438,7 @@ async function handleTelegramMessage(message) {
 
 async function handleTelegramLogin(request) {
     const {username, name, chatId} = request;
-    const token = generateToken(10);
+    const token = generateToken(16);
     const loginKey = [config.namespace, 'login', username, 'h'].join(':');
     let [hmset] = await multiExecAsync(client, multi => {
         multi.hmset(loginKey, {token, username, name, chatId});
@@ -459,13 +460,43 @@ async function handleTelegramLogin(request) {
 async function handleTelegramListSessions(request) {
     const {username, name, chatId} = request;
     const sessionListKey = [config.namespace, 'session', username, 'l'].join(':');
-    const [ids] = await multiExecAsync(client, multi => {
+    const [sessionIds] = await multiExecAsync(client, multi => {
         multi.lrange(sessionListKey, 0, 5);
     });
-    await sendTelegramReply(request, 'html', [
-        `Okay, found ${username} sessions: ${ids.join(' ')}`,
-        `Oh apologies, this feature not yet implemented. Please check again from Monday 9th January.`
-    ]);
+    if (!sessionIds.length) {
+        await sendTelegramReply(request, 'html', [
+            `No sessions found.`
+        ]);
+        return;
+
+    }
+    const sessionId = sessionIds[0];
+    const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
+    const [session] = await multiExecAsync(client, multi => {
+        multi.hgetall(sessionKey);
+    });
+    if (session) {
+        const elapsedMinutes = (Date.now() - session.started)/1000/60;
+        if (sessionIds.length === 1) {
+            await sendTelegramReply(request, 'html', [
+                `Your latest session was created ${elapsedMinutes} ago.`,
+            ]);
+        } else {
+            await sendTelegramReply(request, 'html', [
+                `Your latest session was created ${elapsedMinutes} ago.`,
+            ]);
+        }
+    } else {
+        if (sessionIds.length === 1) {
+            await sendTelegramReply(request, 'html', [
+                `Your latest session has expired.`,
+            ]);
+        } else {
+            await sendTelegramReply(request, 'html', [
+                `Your latest session has expired.`,
+            ]);
+        }
+    }
 }
 
 async function handleTelegramLogout(request) {
@@ -476,7 +507,7 @@ async function handleTelegramLogout(request) {
     });
     await sendTelegramReply(request, 'html', [
         `Okay, found ${username} sessions: ${ids.join(' ')}`,
-        `Oh apologies, this feature not yet implemented. Please check again from Monday 9th January.`
+        `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
     ]);
 }
 
@@ -496,7 +527,7 @@ async function handleTelegramGrant(request) {
         } else {
             await sendTelegramReply(request, 'html', [
                 `Okay, ${username} wishes to grant role ${role} to ${user}.`,
-                `Oh apologies, this feature not yet implemented. Please check again from Monday 9th January.`
+                `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
             ]);
         }
     }
@@ -511,7 +542,7 @@ async function handleTelegramListUsers(request) {
     } else {
         await sendTelegramReply(request, 'html', [
             `You wish to list users and their roles.`,
-            `Oh apologies, this feature not yet implemented. Please check again from Monday 9th January.`
+            `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
         ]);
     }
 }
@@ -532,7 +563,7 @@ async function handleTelegramRevoke(request) {
         } else {
             await sendTelegramReply(request, 'html', [
                 `Okay, ${username} wishes to revoke role ${role} from ${user}.`,
-                `Oh apologies, this feature not yet implemented. Please check again from Monday 9th January.`
+                `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
             ]);
         }
     }
