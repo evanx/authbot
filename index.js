@@ -324,6 +324,7 @@ async function handleLogout(ctx) {
             multi.del(sessionKey);
         });
         if (session && session.username) {
+            const loginKey = [config.namespace, 'login', username].join(':');
             await multiExecAsync(client, multi => {
                 multi.del(loginKey);
             });
