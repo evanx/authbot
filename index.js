@@ -237,6 +237,14 @@ async function startHttpServer() {
         await handleHome(ctx);
     });
     app.use(bodyParser());
+    app.use(async (ctx, next) => {
+        try {
+            await next();
+        } catch (err) {
+            ctx.body = err.message;
+            ctx.status = 500;
+        }
+    });
     app.use(api.routes());
     app.use(async ctx => {
         ctx.status = 404;
