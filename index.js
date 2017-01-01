@@ -224,6 +224,7 @@ async function start() {
         });
         state.sub.subscribe(config.srcChannel);
     }
+    
     return startHttpServer();
 }
 
