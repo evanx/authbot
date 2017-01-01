@@ -159,7 +159,7 @@ if (configFile && process.env.NODE_ENV === 'development') {
 const redis = require('redis');
 const client = redis.createClient(6379, config.redisHost);
 
-assert(process.env.NODE_ENV);
+assert(process.env.NODE_ENV, 'NODE_ENV');
 
 async function multiExecAsync(client, multiFunction) {
     const multi = client.multi();
@@ -200,7 +200,7 @@ async function startProduction() {
 
 async function start() {
     if (config.hubRedis) {
-        assert(config.hubNamespace);
+        assert(config.hubNamespace, 'hubNamespace');
         state.sub = redis.createClient(config.hubRedis);
         state.sub.on('message', (channel, message) => {
             logger.debug({channel, message});
@@ -253,7 +253,7 @@ async function handleHome(ctx) {
         `</head>`,
         `<body>`,
         `<h1>Welcome</h1>`,
-        `<p><a href='https://telegram.me/${config.name}'>${config.name}</a></p>`,
+        `<p><a href='https://telegram.me/${config.bot}'>${config.bot}</a></p>`,
         `</body>`,
         `</html>`
     ].join('\n');
