@@ -395,6 +395,7 @@ async function handleLogin(ctx) {
         return;
     }
     assert.equal(login.username, username, 'username');
+    assert.equal(login.token, token, 'token');
     const sessionId = [token, generateToken(16)].join('_');
     const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
     const sessionListKey = [config.namespace, 'session', username, 'l'].join(':');

@@ -53,6 +53,25 @@ async function startHttpServer() {
 }
 ```
 
+The `/authbot/in/` HTTP handler will set the session cookie:
+```javascript
+assert.equal(login.username, username, 'username');
+assert.equal(login.token, token, 'token');
+const sessionId = [token, generateToken(16)].join('_');
+const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
+const sessionListKey = [config.namespace, 'session', username, 'l'].join(':');
+const session = Object.assign({}, login, {started: Date.now()});
+const [hmset] = await multiExecAsync(client, multi => {
+    multi.hmset(sessionKey, session);
+    multi.expire(sessionKey, config.sessionExpire);
+    multi.del(loginKey);
+    multi.lpush(sessionListKey, sessionId);
+    multi.ltrim(sessionListKey, 0, 3);
+});
+ctx.cookies.set('sessionId', sessionId, {maxAge: config.cookieExpire, domain: config.domain, path: '/'});
+ctx.redirect(config.redirectAuth);
+```
+
 For demo purposes we also serve the following pages, which would ordinarily be served by the app:
 ```javascript
 api.get('/', async ctx => {
@@ -66,6 +85,24 @@ api.get('/noauth', async ctx => { // authentication failed
 });
 ```
 where `/auth` and `/noauth` are redirects from `/authbot/in`
+
+The login is created in Redis by the Telegram bot, which provides the `/authbot/in/` "magic link."
+```javascript
+async function handleTelegramLogin(request) {
+    const {username, name, chatId} = request;
+    const token = generateToken(16);
+    const loginKey = [config.namespace, 'login', username, 'h'].join(':');
+    let [hmset] = await multiExecAsync(client, multi => {
+        multi.hmset(loginKey, {token, username, name, chatId});
+        multi.expire(loginKey, config.loginExpire);
+    });
+    if (hmset) {
+        await sendTelegramReply(request, 'html', [
+            `You can login via https://${[config.domain, 'authbot', 'in', username, token].join('/')}.`,
+            `This link expires in ${config.loginExpire} seconds.`,
+            `Powered by https://github.com/evanx/authbot.`
+```
+where a secret token is randomly generated for the "magic link."
 
 ## Config
 
