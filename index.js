@@ -210,21 +210,21 @@ async function start() {
             handleMessage(JSON.parse(message));
         });
         state.sub.subscribe([config.hubNamespace, config.secret].join(':'));
-    } else if (config.srcChannel) {
-        assert(config.srcFile, 'srcFile');
+    } else if (process.env.srcChannel) {
+        assert(process.env.srcFile, 'srcFile');
         state.sub = redis.createClient();
         state.sub.on('message', (channel, message) => {
-            fs.writeFile(config.srcFile, message, err => {
+            fs.writeFile(process.env.srcFile, message, err => {
                 if (err) {
-                    logger.error('srcFile', srcFile, err);
+                    logger.error('srcFile', process.env.srcFile, err);
                 } else {
                     end();
                 }
             });
         });
-        state.sub.subscribe(config.srcChannel);
+        state.sub.subscribe(process.env.srcChannel);
+        logger.info('srcChannel', process.env.srcChannel);
     }
-    
     return startHttpServer();
 }
 
