@@ -53,6 +53,7 @@ const configMeta = {
         info: 'https://telegram.org'
     },
     hubRedis: {
+        required: false,
         description: 'Remote hub for bot messages via Redis, especially for development',
         example: 'redis://localhost:6333',
         info: 'https://github.com/evanx/webhook-push'
@@ -211,8 +212,14 @@ async function startHttpServer() {
     api.get('/authbot/in/:username/:token', async ctx => {
         await handleLogin(ctx);
     });
-    api.get('/authbot/out', async ctx => {
+    api.get('/authbot/logout', async ctx => {
         await handleLogout(ctx);
+    });
+    api.get('/auth', async ctx => {
+        ctx.body = ctx.request.url;
+    });
+    api.get('/noauth', async ctx => {
+        ctx.body = ctx.request.url;
     });
     app.use(api.routes());
     app.use(async ctx => {
