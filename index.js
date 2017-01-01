@@ -254,6 +254,10 @@ async function startHttpServer() {
 
 async function handleHome(ctx) {
     const name = ctx.cookies.get('sessionId');
+    const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
+    ? `tg://${config.bot}`
+    : `https://telegram.me/${config.bot}`;
+    const botLink = `<a href="${botUrl}">${botUrl}</a>`;
     ctx.body = [
         `<html>`,
         `<head>`,
@@ -261,7 +265,7 @@ async function handleHome(ctx) {
         `</head>`,
         `<body>`,
         `<h1>Welcome</h1>`,
-        `<p><a href='https://telegram.me/${config.bot}'>Use https://telegram.me/${config.bot} to login</a></p>`,
+        `<p>Use ${botLink} to login</p>`,
         `</body>`,
         `</html>`
     ].join('\n');
@@ -279,10 +283,6 @@ async function handleAuth(ctx) {
     if (!session) {
         throw new Error('Session expired');
     }
-    const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
-    ? `tg://${config.bot}`
-    : `https://telegram.me/${config.bot}`;
-    const botLink = `<a href="${botUrl}">${botUrl}</a>`;
     ctx.body = [
         `<html>`,
         `<head>`,
