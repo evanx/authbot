@@ -1,6 +1,7 @@
 const assert = require('assert');
 const crypto = require('crypto');
 const fetch = require('node-fetch');
+const fs = require('fs');
 const lodash = require('lodash');
 const Promise = require('bluebird');
 const Koa = require('koa');
@@ -225,6 +226,7 @@ async function start() {
         state.sub.subscribe(process.env.srcChannel);
         logger.info('src', process.env.srcChannel);
     }
+
     return startHttpServer();
 }
 
