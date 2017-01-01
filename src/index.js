@@ -136,7 +136,7 @@ if (configFile && process.env.NODE_ENV === 'development') {
         `https://${config.domain}/authbot/webhook/${config.secret}`
     ].forEach(webhookUrl => {
         const apiUrl = `${state.botUrl}/setWebhook?url=${encodeURI(webhookUrl)}`;
-        console.log(`curl '${apiUrl}' | jq '.'`);
+        console.log(`curl -s '${apiUrl}' | jq '.'`);
     });
     console.log(`\nssh -L${configFile.hubLocalPort}:127.0.0.1:6379 ${configFile.hubHost}`);
     const subscribeChannel = [configFile.hubNamespace, config.secret].join(':');
@@ -162,7 +162,7 @@ async function multiExecAsync(client, multiFunction) {
 function generateToken(length = 16) {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const charset = '0123456789' + letters + letters.toLowerCase();
-    return crypto.randomBytes(length).map(value => charset[Math.floor(value * charset.length / 256)]).join('');
+    return crypto.randomBytes(length).map(value => charset.charCodeAt(Math.floor(value * charset.length / 256))).toString();
 }
 
 (async function() {
@@ -209,10 +209,10 @@ async function startHttpServer() {
         }
     });
     api.get('/authbot/in/:username/:token', async ctx => {
-        await handleIn(ctx);
+        await handleLogin(ctx);
     });
     api.get('/authbot/out', async ctx => {
-        await handleOut(ctx);
+        await handleLogout(ctx);
     });
     app.use(api.routes());
     app.use(async ctx => {
@@ -221,7 +221,7 @@ async function startHttpServer() {
     state.server = app.listen(config.port);
 }
 
-async function handleOut(ctx) {
+async function handleLogout(ctx) {
     const sessionId = ctx.cookies.get('sessionId', sessionId);
     if (sessionId) {
         const sessionKey = [config.namespace, 'session', sessionId].join(':');
@@ -239,9 +239,9 @@ async function handleOut(ctx) {
     ctx.redirect(config.redirectNoAuth);
 }
 
-async function handleIn(ctx) {
+async function handleLogin(ctx) {
     const ua = ctx.get('User-Agent');
-    logger.debug('handleIn', ua);
+    logger.debug('handleLogin', ua);
     if (ua.startsWith('TelegramBot')) {
         ctx.status = 403;
         return;
@@ -251,11 +251,11 @@ async function handleIn(ctx) {
     const [login] = await multiExecAsync(client, multi => {
         multi.hgetall(loginKey);
     });
-    logger.debug('handleIn', ua, loginKey, login);
+    logger.debug('handleLogin', ua, loginKey, login);
     if (!login) {
         const sessionId = ctx.cookies.get('sessionId', sessionId);
         if (sessionId) {
-            logger.debug('handleIn', {sessionId}, state.redirectNoAuth);
+            logger.debug('handleLogin', {sessionId}, state.redirectNoAuth);
         }
         ctx.status = 403;
         ctx.redirect(state.redirectNoAuth);
@@ -286,7 +286,7 @@ async function handleMessage(message) {
     handleTelegramLogin(request);
 }
 
-async function handleTelegramIn(request) {
+async function handleTelegramLogin(request) {
     const match = request.text.match(/\/in$/);
     if (!match) {
         await sendTelegram(request.chatId, 'html', [
@@ -294,16 +294,16 @@ async function handleTelegramIn(request) {
         ]);
         return;
     }
-    const username = request.username;
+    const {username, name, chatId} = request;
     const token = generateToken(10);
     const loginKey = [config.namespace, 'login', username].join(':');
     let [hmset] = await multiExecAsync(client, multi => {
-        multi.hmset(loginKey, {token, username});
+        multi.hmset(loginKey, {token, username, name, chatId});
         multi.expire(loginKey, config.loginExpire);
     });
     if (hmset) {
         await sendTelegramReply(request, 'html', [
-            `You can login via https://${[config.domain, 'in', username, token].join('/')}.`,
+            `You can login via https://${[config.domain, 'authbot', 'in', username, token].join('/')}.`,
             `This link expires in ${config.loginExpire} seconds.`
         ]);
     } else {
