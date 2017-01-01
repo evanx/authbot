@@ -192,11 +192,14 @@ async function startProduction() {
 }
 
 async function start() {
-    sub.on('message', (channel, message) => {
-        logger.debug({channel, message});
-        handleMessage(JSON.parse(message));
-    });
-    sub.subscribe('telebot:' + config.secret);
+    if (config.hubRedis) {
+        assert(config.hubNamespace);
+        sub.on('message', (channel, message) => {
+            logger.debug({channel, message});
+            handleMessage(JSON.parse(message));
+        });
+        sub.subscribe([config.hubNamespace, config.secret].join(':'));
+    }
     return startHttpServer();
 }
 
