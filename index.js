@@ -260,14 +260,31 @@ async function handleHome(ctx) {
 }
 
 async function handleAuth(ctx) {
-    const name = ctx.cookies.get('sessionId');
+    const sessionId = ctx.cookies.get('sessionId');
+    if (!sessionId) {
+        throw new Error('No cookie');
+    }
+    const sessionKey = [config.namespace, 'session', sessionId].join(':');
+    const [session] = await multiExecAsync(client, multi => {
+        multi.hgetall(sessionKey);
+    });
+    if (!session) {
+        throw new Error('Session expired');
+    }
+    const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
+    ? `tg://${config.bot}`
+    : `https://telegram.me/${config.bot}`;
+    const botLink = `<a href="${botUrl}">${botUrl}</a>`;
     ctx.body = [
         `<html>`,
         `<head>`,
         `  <title>AuthBot Demo</title>`,
         `</head>`,
         `<body>`,
-        `<h1>Hello ${name}</h1>`,
+        `<h1>Hello ${session.name}</h1>`,
+        `<p>Incidently, your session ID is ${sessionId}. (This is set via cookie, and verified.)</p>`,
+        `<p>Logout to clear the session and cookie via <a href="/authbot/logout">/authbot/logout</a>.</p>`,
+        `<p>You can also logout by sending <tt>/out</tt> command to ${botLink}.</p>`,
         `</body>`,
         `</html>`
     ].join('\n');
