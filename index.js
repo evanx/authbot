@@ -401,7 +401,7 @@ async function handleLogin(ctx) {
         multi.expire(sessionKey, config.sessionExpire);
         multi.del(loginKey);
         multi.lpush(sessionListKey, sessionId);
-        multi.ltrim(sessionListKey, 0, 5);
+        multi.ltrim(sessionListKey, 0, 3);
     });
     ctx.cookies.set('sessionId', sessionId, {maxAge: config.cookieExpire, domain: config.domain, path: '/'});
     ctx.redirect(config.redirectAuth);
@@ -421,9 +421,9 @@ async function handleTelegramMessage(message) {
         return handleTelegramLogin(request);
     } else if (request.text === '/logout') {
         return handleTelegramLogout(request);
-    } else if (request.text.startsWith('/sessions')) {
+    } else if (request.text.startsWith('/session')) {
         return handleTelegramListSessions(request);
-    } else if (request.text.startsWith('/users')) {
+    } else if (request.text.startsWith('/user')) {
         return handleTelegramListUsers(request);
     } else if (request.text.startsWith('/grant')) {
         return handleTelegramGrant(request);
@@ -468,47 +468,68 @@ async function handleTelegramListSessions(request) {
             `No sessions found.`
         ]);
         return;
-
     }
-    const sessionId = sessionIds[0];
-    const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
-    const [session] = await multiExecAsync(client, multi => {
-        multi.hgetall(sessionKey);
-    });
-    if (session) {
-        const elapsedMinutes = (Date.now() - session.started)/1000/60;
-        if (sessionIds.length === 1) {
-            await sendTelegramReply(request, 'html', [
-                `Your latest session was created ${elapsedMinutes} ago.`,
-            ]);
-        } else {
-            await sendTelegramReply(request, 'html', [
-                `Your latest session was created ${elapsedMinutes} ago.`,
-            ]);
-        }
+    const sessions = lodash.compact(await multiExecAsync(client, multi => {
+        sessionIds.forEach(sessionId => {
+            const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
+            multi.hgetall(sessionKey);
+        });
+    }));
+    const session0 = lodash.first(sessions);
+    const sessionl = lodash.last(sessions);
+    if (session0) {
+        await sendTelegramReply(request, 'html', [
+            `Your latest session was created ${formatElapsed(session0.started)} ago.`,
+        ]);
     } else {
-        if (sessionIds.length === 1) {
-            await sendTelegramReply(request, 'html', [
-                `Your latest session has expired.`,
-            ]);
-        } else {
-            await sendTelegramReply(request, 'html', [
-                `Your latest session has expired.`,
-            ]);
-        }
+        await sendTelegramReply(request, 'html', [
+            `Your latest session has expired.`,
+        ]);
     }
 }
 
 async function handleTelegramLogout(request) {
     const {username, name, chatId} = request;
     const sessionListKey = [config.namespace, 'session', username, 'l'].join(':');
-    const [ids] = await multiExecAsync(client, multi => {
+    const [sessionIds] = await multiExecAsync(client, multi => {
         multi.lrange(sessionListKey, 0, 5);
     });
-    await sendTelegramReply(request, 'html', [
-        `Okay, found ${username} sessions: ${ids.join(' ')}`,
-        `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
-    ]);
+    if (!sessionIds.length) {
+        await sendTelegramReply(request, 'html', [
+            `No sessions found.`
+        ]);
+        return;
+    }
+    const sessions = lodash.compact(await multiExecAsync(client, multi => {
+        sessionIds.forEach(sessionId => {
+            const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
+            multi.hgetall(sessionKey);
+        });
+    }));
+    await multiExecAsync(client, multi => {
+        sessionIds.forEach(sessionId => {
+            const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
+            multi.del(sessionKey);
+        });
+    });
+    if (sessions.length === 0) {
+        await sendTelegramReply(request, 'html', [
+            `No active sessions.`,
+        ]);
+    } else if (sessions.length === 1) {
+        const session = sessions[0];
+        await sendTelegramReply(request, 'html', [
+            `Destroyed the session that was created ${formatElapsed(session.started)} ago.`,
+        ]);
+    } else {
+        const session0 = sessions[0];
+        const session = lodash.last(sessions);
+        await sendTelegramReply(request, 'html', [
+            `Destroyed ${sessions.length} sessions.`,
+            `The latest was created ${formatElapsed(session0.started)} ago.`,
+            `The oldest was created ${formatElapsed(session.started)} ago.`,
+        ]);
+    }
 }
 
 async function handleTelegramGrant(request) {
@@ -518,15 +539,15 @@ async function handleTelegramGrant(request) {
             `You are not the admin user, please ask ${config.admin}.`
         ]);
     } else {
-        const [role, user] = (/^\/grant ([a-z_]+) to ([a-z_]+)/.match(request.text) || []).slice(1);
-        if (!role) {
+        const [role, user] = (request.text.match(/^\/grant ([a-z_]+) to ([a-z_]+)$/) || []).slice(1);
+        if (!user) {
             await sendTelegramReply(request, 'html', [
-                `Try /grant <tt>role<tt> to <tt>username</tt>`,
-                `e.g. grant <tt>admin</tt> role to another Telegram user`
+                `Try /grant <code>role</code> to <code>username</code>`,
+                `e.g. <code>/grant admin to other_user</code>`
             ]);
         } else {
             await sendTelegramReply(request, 'html', [
-                `Okay, ${username} wishes to grant role ${role} to ${user}.`,
+                `You wish to grant role <code>${role}</code> to <code>${user}</code>.`,
                 `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
             ]);
         }
@@ -554,15 +575,15 @@ async function handleTelegramRevoke(request) {
             `You are not the admin user, please ask ${config.admin}.`
         ]);
     } else {
-        const [role, user] = (/^\/revoke ([a-z_]+) from ([a-z_]+)/.match(request.text) || []).slice(1);
+        const [role, user] = (request.text.match(/^\/revoke ([a-z_]+) from ([a-z_]+)$/) || []).slice(1);
         if (!user) {
             await sendTelegramReply(request, 'html', [
-                `Try /revoke <tt>role<tt> from <tt>username</tt>`,
-                `e.g. revoke <tt>admin</tt> role from another Telegram user`
+                `Try /revoke <code>role</code> from <code>username</code>`,
+                `e.g. <code>revoke admin from other_user</code>`
             ]);
         } else {
             await sendTelegramReply(request, 'html', [
-                `Okay, ${username} wishes to revoke role ${role} from ${user}.`,
+                `You wish to revoke role <code>${role}</code> from <code>${user}</code>.`,
                 `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
             ]);
         }
@@ -613,4 +634,31 @@ async function end() {
     if (state.server) {
         state.server.close();
     }
+}
+
+function formatElapsed(started) {
+    const elapsedMillis = Date.now() - started;
+    const elapsedSeconds = Math.floor(elapsedMillis/1000);
+    const elapsedMinutes = Math.floor(elapsedSeconds/60);
+    const elapsedHours = Math.floor(elapsedMinutes/60);
+    const elapsedDays = Math.floor(elapsedHours/24);
+    if (elapsedDays > 1) {
+        return `${elapsedDays} days`;
+    }
+    if (elapsedHours > 25) {
+        return `1 day and ${elapsedHours - 24} hours`;
+    }
+    if (elapsedMinutes > 120) {
+        return `${elapsedHours} hours`;
+    }
+    if (elapsedMinutes > 61) {
+        return `1 hour and ${elapsedMinutes - 60} minutes`;
+    }
+    if (elapsedMinutes > 1) {
+        return `${elapsedMinutes} minutes`;
+    }
+    if (elapsedSeconds > 1) {
+        return `${elapsedSeconds} seconds`;
+    }
+    return `a second`;
 }
