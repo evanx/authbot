@@ -317,7 +317,8 @@ function renderPage(ctx, content) {
     ctx.body = lodash.flatten([
         `<html>`,
         `<head>`,
-        `  <title>AuthBot Demo</title>`,
+        `<title>AuthBot Demo</title>`,
+        `<meta name="viewport" content="width=device-width, initial-scale=1">`,
         `</head>`,
         `<body>`,
         `<h1>${content.heading}</h1>`,
