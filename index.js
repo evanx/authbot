@@ -23,6 +23,8 @@ const configDefault = {
     redirectAuth: '/auth',
     redirectNoAuth: '/noauth',
     sessionRoute: true,
+    notifyTelegramLogin: false,
+    notifyTelegramLogout: true,
     loggerLevel: 'debug'
 };
 
@@ -81,7 +83,7 @@ const config = Object.keys(configMeta)
     } else if (configFile && configFile[key]) {
         config[key] = configFile[key];
         configKeys.push(key);
-    } else if (!configDefault[key] && configMeta[key].required !== false) {
+    } else if (!configDefault[key] && configMeta[key] && configMeta[key].required !== false) {
         missingConfigKeys.push(key);
     }
     return config;
@@ -449,6 +451,13 @@ async function handleLogout(ctx) {
             await multiExecAsync(client, multi => {
                 multi.del(loginKey);
             });
+            if (config.notifyTelegramLogout) {
+                if (session.chatId && session.name && session.started) {
+                    await sendTelegram(session.chatId, 'html', [
+                        `Thanks ${session.name}, you have logged out of a session after ${formatElapsed(session.started)}.`
+                    ]);
+                }
+            }
         }
         ctx.cookies.set('sessionId', '', {expires: new Date(0), domain: config.domain, path: '/'});
     }
@@ -492,10 +501,12 @@ async function handleLogin(ctx) {
     });
     ctx.cookies.set('sessionId', sessionId, {maxAge: config.cookieExpire, domain: config.domain, path: '/'});
     ctx.redirect(config.redirectAuth);
-    if (session.chatId && session.name) {
-        await sendTelegram(session.chatId, 'html', [
-            `Thanks ${session.name}, you have logged in.`
-        ]);
+    if (config.notifyTelegramLogin) {
+        if (session.chatId && session.name) {
+            await sendTelegram(session.chatId, 'html', [
+                `Thanks ${session.name}, you have logged in.`
+            ]);
+        }
     }
 }
 
@@ -569,12 +580,12 @@ async function handleTelegramListSessions(request) {
     }));
     if (sessions.length === 0) {
         await sendTelegramReply(request, 'html', [
-            `Your latest session has expired.`,
+            `Your latest sessions have all expired.`,
         ]);
     } else if (sessions.length === 1) {
         const session0 = lodash.first(sessions);
         await sendTelegramReply(request, 'html', [
-            `Your session was created ${formatElapsed(session0.started)} ago.`,
+            `You have one active session that was created ${formatElapsed(session0.started)} ago.`
         ]);
     } else {
         const session0 = lodash.first(sessions);
@@ -618,7 +629,7 @@ async function handleTelegramLogout(request) {
     } else if (sessions.length === 1) {
         const session = sessions[0];
         await sendTelegramReply(request, 'html', [
-            `The session that was created ${formatElapsed(session.started)} ago, has now been deleted.`,
+            `The session that was created ${formatElapsed(session.started)} ago, has now been deleted.`
         ]);
     } else {
         const session0 = sessions[0];
