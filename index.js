@@ -338,10 +338,14 @@ async function startHttpServer() {
     logger.info('http', config.port, formatTime(new Date()));
 }
 
-function renderPage(ctx, content) {
-    const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
+function getBotUrl(ctx) {
+    return /(Mobile)/.test(ctx.get('user-agent'))
     ? `tg://${config.bot}`
     : `https://web.telegram.org/#/im?p=@${config.bot}`;
+}
+
+function renderPage(ctx, content) {
+    const botUrl = getBotUrl(ctx);
     const botLink = `<a href="${botUrl}">@${config.bot}</a> Telegram Bot`;
     const paragraphs = content.paragraphs.map(p => p.replace('{botLink}', botLink));
     ctx.body = lodash.flatten([
@@ -470,10 +474,7 @@ async function handleLogin(ctx) {
             logger.debug('handleLogin', {sessionId}, config.redirectNoAuth);
         }
         ctx.status = 403;
-        const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
-        ? `tg://${config.bot}`
-        : `https://web.telegram.org/#/im?p=@${config.bot}`;
-        ctx.redirect(botUrl);
+        ctx.redirect(config.redirectNoAuth);
         return;
     }
     assert.equal(login.username, username, 'username');
