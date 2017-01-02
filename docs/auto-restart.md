@@ -58,7 +58,7 @@ We run the app in a loop so that it will auto restart.
 while true
 do
   configFile=~/private-config/authtest.webserva.com/authbot/development.js \
-  npm run tmp
+  NODE_ENV=development node --harmony-async-await index.js
 done
 ```
 
