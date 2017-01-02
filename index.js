@@ -336,7 +336,7 @@ async function startHttpServer() {
         ctx.status = 404;
     });
     state.server = app.listen(config.port);
-    logger.info('http', config.port);
+    logger.info('http', config.port, formatTime(Date.now()));
 }
 
 function renderPage(ctx, content) {
@@ -530,7 +530,7 @@ async function handleSession(ctx) {
         });
         if (hmset) {
             await sendTelegramReply(request, 'html', [
-                `You can login via https://${[config.domain, 'authbot', 'in', username, token].join('/')}.`,
+                `You can login via https://${[config.domain, 'authbot', 'login', username, token].join('/')}.`,
                 `This link expires in ${config.loginExpire} seconds.`,
                 `Powered by https://github.com/evanx/authbot.`
             ]);
