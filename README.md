@@ -26,9 +26,6 @@ This provides a relatively easy way to provide authentication and authorisation 
 ![screenshot](https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-page-auth.png)
 <hr>
 
-<img src="https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-mobile1.jpg" width="360"/>
-<hr>
-
 ## Implementation
 
 We use Koa:
@@ -100,6 +97,9 @@ async function handleTelegramLogin(request) {
             `Powered by https://github.com/evanx/authbot.`
 ```
 where a secret token is randomly generated for the "magic link."
+
+<img src="https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-mobile1.jpg" width="360"/>
+<hr>
 
 ## Config
 
