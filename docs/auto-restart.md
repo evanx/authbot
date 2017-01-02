@@ -25,17 +25,18 @@ do
   if [ -n "$file" ]
   then
     redis-cli get $ns:$file > tmp/$file
-    redis-cli publish $ns:adv $file
+    redis-cli publish $ns:res $file
+    redis-cli lpush $ns:res $file
     echo $ns:adv $file
   fi
 done
-
 ```
-which will write an updated script `tmp/index.js` and publish this event.
+where we write the updated script `tmp/index.js` and publish this event to a channel,
+and also push to a list for `brpop.`
 
 The app is configured with an `endChannel`
 ```javascript
-endChannel: 'restart:authbot:adv',
+endChannel: 'restart:authbot:res',
 endMessage: 'index.js',
 ```
 The app will subscribe to `endChannel` and exit when an updated `tmp/index.js` is available.

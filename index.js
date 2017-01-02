@@ -336,7 +336,7 @@ async function startHttpServer() {
         ctx.status = 404;
     });
     state.server = app.listen(config.port);
-    logger.info('http', config.port, formatTime(Date.now()));
+    logger.info('http', config.port, formatTime(new Date()));
 }
 
 function renderPage(ctx, content) {
@@ -406,343 +406,348 @@ async function getSession(ctx) {
 async function handleSession(ctx) {
     const sessionId = ctx.cookies.get('sessionId');
     const session = await getSession(sessionId);
-    if (session && session.username === ctx.param.username &&
-        (Date.now() - session.started)/1000 < config.loginExire) {
-            ctx.status = 200;
-            ctx.body = 'Authenticated';
-        } else {
-            ctx.status = 403;
-            ctx.body = 'Access prohibited';
-        }
+    if (session && session.username === ctx.param.username
+        && (Date.now() - session.started)/1000 < config.loginExire
+    ) {
+        ctx.status = 200;
+        ctx.body = 'Authenticated';
+    } else {
+        ctx.status = 403;
+        ctx.body = 'Access prohibited';
     }
+}
 
-    async function handleAuth(ctx) {
-        const sessionId = ctx.cookies.get('sessionId');
-        const session = await getSession(sessionId);
-        renderPage(ctx, {
-            heading: `Welcome ${session.name}`,
-            paragraphs: [
-                `Logout to clear the session and cookie via <a href="/authbot/logout">/authbot/logout</a>`,
-                `You can also logout by sending <tt>/logout</tt> command to {botLink}.`,
-                `Incidently, your session ID is set via cookie on this domain, and can be validated ` +
-                `against the Redis storage used by this AuthBot.`
-            ]
+async function handleAuth(ctx) {
+    const sessionId = ctx.cookies.get('sessionId');
+    const session = await getSession(sessionId);
+    renderPage(ctx, {
+        heading: `Welcome ${session.name}`,
+        paragraphs: [
+            `Logout to clear the session and cookie via <a href="/authbot/logout">/authbot/logout</a>`,
+            `You can also logout by sending <tt>/logout</tt> command to {botLink}.`,
+            `Incidently, your session ID is set via cookie on this domain, and can be validated ` +
+            `against the Redis storage used by this AuthBot.`
+        ]
+    });
+}
+
+async function handleLogout(ctx) {
+    const sessionId = ctx.cookies.get('sessionId');
+    if (sessionId) {
+        const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
+        const [session] = await multiExecAsync(client, multi => {
+            multi.hgetall(sessionKey);
+            multi.del(sessionKey);
         });
+        if (session && session.username) {
+            const loginKey = [config.namespace, 'login', session.username, 'h'].join(':');
+            await multiExecAsync(client, multi => {
+                multi.del(loginKey);
+            });
+        }
+        ctx.cookies.set('sessionId', '', {expires: new Date(0), domain: config.domain, path: '/'});
     }
+    ctx.redirect(config.redirectNoAuth);
+}
 
-    async function handleLogout(ctx) {
+async function handleLogin(ctx) {
+    const ua = ctx.get('User-Agent');
+    logger.debug('handleLogin', ua);
+    if (ua.startsWith('TelegramBot')) {
+        ctx.status = 403;
+        return;
+    }
+    const {username, token} = ctx.params;
+    const loginKey = [config.namespace, 'login', username, 'h'].join(':');
+    const [login] = await multiExecAsync(client, multi => {
+        multi.hgetall(loginKey);
+    });
+    logger.debug('handleLogin', {loginKey, login});
+    if (!login) {
         const sessionId = ctx.cookies.get('sessionId');
         if (sessionId) {
+            logger.debug('handleLogin', {sessionId}, state.redirectNoAuth);
+        }
+        ctx.status = 403;
+        const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
+        ? `tg://${config.bot}`
+        : `https://web.telegram.org/#/im?p=@${config.bot}`;
+        ctx.redirect(botUrl);
+        return;
+    }
+    assert.equal(login.username, username, 'username');
+    assert.equal(login.token, token, 'token');
+    const sessionId = [token, generateToken(16)].join('_');
+    const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
+    const sessionListKey = [config.namespace, 'session', username, 'l'].join(':');
+    const session = Object.assign({}, login, {started: Date.now()});
+    const [hmset] = await multiExecAsync(client, multi => {
+        multi.hmset(sessionKey, session);
+        multi.expire(sessionKey, config.sessionExpire);
+        multi.del(loginKey);
+        multi.lpush(sessionListKey, sessionId);
+        multi.ltrim(sessionListKey, 0, 3);
+    });
+    ctx.cookies.set('sessionId', sessionId, {maxAge: config.cookieExpire, domain: config.domain, path: '/'});
+    ctx.redirect(config.redirectAuth);
+}
+
+async function handleTelegramMessage(message) {
+    const from = message.message.from;
+    const request = {
+        chatId: message.message.chat.id,
+        username: from.username,
+        name: from.first_name || from.username,
+        text: message.message.text,
+        timestamp: message.message.date
+    };
+    logger.debug('webhook', request, message.message);
+    if (request.text === '/login') {
+        return handleTelegramLogin(request);
+    } else if (request.text === '/logout') {
+        return handleTelegramLogout(request);
+    } else if (request.text.startsWith('/session')) {
+        return handleTelegramListSessions(request);
+    } else if (request.text.startsWith('/user')) {
+        return handleTelegramListUsers(request);
+    } else if (request.text.startsWith('/grant')) {
+        return handleTelegramGrant(request);
+    } else if (request.text.startsWith('/revoke')) {
+        return handleTelegramRevoke(request);
+    } else {
+        await sendTelegram(request.chatId, 'html', [
+            `Try <code>/login</code>`
+        ]);
+    }
+}
+
+async function handleTelegramLogin(request) {
+    const {username, name, chatId} = request;
+    const token = generateToken(16);
+    const loginKey = [config.namespace, 'login', username, 'h'].join(':');
+    let [hmset] = await multiExecAsync(client, multi => {
+        multi.hmset(loginKey, {token, username, name, chatId});
+        multi.expire(loginKey, config.loginExpire);
+    });
+    if (hmset) {
+        await sendTelegramReply(request, 'html', [
+            `You can login via https://${[config.domain, 'authbot', 'login', username, token].join('/')}.`,
+            `This link expires in ${config.loginExpire} seconds.`,
+            `Powered by https://github.com/evanx/authbot.`
+        ]);
+    } else {
+        await sendTelegramReply(request, 'html', [
+            `Apologies, the login command failed.`,
+        ]);
+    }
+}
+
+async function handleTelegramListSessions(request) {
+    const {username, name, chatId} = request;
+    const sessionListKey = [config.namespace, 'session', username, 'l'].join(':');
+    const [sessionIds] = await multiExecAsync(client, multi => {
+        multi.lrange(sessionListKey, 0, 5);
+    });
+    if (!sessionIds.length) {
+        await sendTelegramReply(request, 'html', [
+            `No sessions found.`
+        ]);
+        return;
+    }
+    const sessions = lodash.compact(await multiExecAsync(client, multi => {
+        sessionIds.forEach(sessionId => {
             const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
-            const [session] = await multiExecAsync(client, multi => {
-                multi.hgetall(sessionKey);
-                multi.del(sessionKey);
-            });
-            if (session && session.username) {
-                const loginKey = [config.namespace, 'login', session.username, 'h'].join(':');
-                await multiExecAsync(client, multi => {
-                    multi.del(loginKey);
-                });
-            }
-            ctx.cookies.set('sessionId', '', {expires: new Date(0), domain: config.domain, path: '/'});
-        }
-        ctx.redirect(config.redirectNoAuth);
-    }
-
-    async function handleLogin(ctx) {
-        const ua = ctx.get('User-Agent');
-        logger.debug('handleLogin', ua);
-        if (ua.startsWith('TelegramBot')) {
-            ctx.status = 403;
-            return;
-        }
-        const {username, token} = ctx.params;
-        const loginKey = [config.namespace, 'login', username, 'h'].join(':');
-        const [login] = await multiExecAsync(client, multi => {
-            multi.hgetall(loginKey);
+            multi.hgetall(sessionKey);
         });
-        logger.debug('handleLogin', {loginKey, login});
-        if (!login) {
-            const sessionId = ctx.cookies.get('sessionId');
-            if (sessionId) {
-                logger.debug('handleLogin', {sessionId}, state.redirectNoAuth);
-            }
-            ctx.status = 403;
-            const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
-            ? `tg://${config.bot}`
-            : `https://web.telegram.org/#/im?p=@${config.bot}`;
-            ctx.redirect(botUrl);
-            return;
-        }
-        assert.equal(login.username, username, 'username');
-        assert.equal(login.token, token, 'token');
-        const sessionId = [token, generateToken(16)].join('_');
-        const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
-        const sessionListKey = [config.namespace, 'session', username, 'l'].join(':');
-        const session = Object.assign({}, login, {started: Date.now()});
-        const [hmset] = await multiExecAsync(client, multi => {
-            multi.hmset(sessionKey, session);
-            multi.expire(sessionKey, config.sessionExpire);
-            multi.del(loginKey);
-            multi.lpush(sessionListKey, sessionId);
-            multi.ltrim(sessionListKey, 0, 3);
-        });
-        ctx.cookies.set('sessionId', sessionId, {maxAge: config.cookieExpire, domain: config.domain, path: '/'});
-        ctx.redirect(config.redirectAuth);
+    }));
+    const session0 = lodash.first(sessions);
+    const sessionl = lodash.last(sessions);
+    if (session0) {
+        await sendTelegramReply(request, 'html', [
+            `Your latest session was created ${formatElapsed(session0.started)} ago.`,
+        ]);
+    } else {
+        await sendTelegramReply(request, 'html', [
+            `Your latest session has expired.`,
+        ]);
     }
+}
 
-    async function handleTelegramMessage(message) {
-        const from = message.message.from;
-        const request = {
-            chatId: message.message.chat.id,
-            username: from.username,
-            name: from.first_name || from.username,
-            text: message.message.text,
-            timestamp: message.message.date
-        };
-        logger.debug('webhook', request, message.message);
-        if (request.text === '/login') {
-            return handleTelegramLogin(request);
-        } else if (request.text === '/logout') {
-            return handleTelegramLogout(request);
-        } else if (request.text.startsWith('/session')) {
-            return handleTelegramListSessions(request);
-        } else if (request.text.startsWith('/user')) {
-            return handleTelegramListUsers(request);
-        } else if (request.text.startsWith('/grant')) {
-            return handleTelegramGrant(request);
-        } else if (request.text.startsWith('/revoke')) {
-            return handleTelegramRevoke(request);
-        } else {
-            await sendTelegram(request.chatId, 'html', [
-                `Try <code>/login</code>`
-            ]);
-        }
+async function handleTelegramLogout(request) {
+    const {username, name, chatId} = request;
+    const sessionListKey = [config.namespace, 'session', username, 'l'].join(':');
+    const [sessionIds] = await multiExecAsync(client, multi => {
+        multi.lrange(sessionListKey, 0, 5);
+    });
+    if (!sessionIds.length) {
+        await sendTelegramReply(request, 'html', [
+            `No sessions found.`
+        ]);
+        return;
     }
-
-    async function handleTelegramLogin(request) {
-        const {username, name, chatId} = request;
-        const token = generateToken(16);
-        const loginKey = [config.namespace, 'login', username, 'h'].join(':');
-        let [hmset] = await multiExecAsync(client, multi => {
-            multi.hmset(loginKey, {token, username, name, chatId});
-            multi.expire(loginKey, config.loginExpire);
+    const sessions = lodash.compact(await multiExecAsync(client, multi => {
+        sessionIds.forEach(sessionId => {
+            const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
+            multi.hgetall(sessionKey);
         });
-        if (hmset) {
+    }));
+    await multiExecAsync(client, multi => {
+        sessionIds.forEach(sessionId => {
+            const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
+            multi.del(sessionKey);
+        });
+    });
+    if (sessions.length === 0) {
+        await sendTelegramReply(request, 'html', [
+            `No active sessions.`,
+        ]);
+    } else if (sessions.length === 1) {
+        const session = sessions[0];
+        await sendTelegramReply(request, 'html', [
+            `The session that was created ${formatElapsed(session.started)} ago, has now been deleted.`,
+        ]);
+    } else {
+        const session0 = sessions[0];
+        const session = lodash.last(sessions);
+        await sendTelegramReply(request, 'html', [
+            `${sessions.length} sessions have been deleted.`,
+            `The latest was created ${formatElapsed(session0.started)} ago.`,
+            `The oldest was created ${formatElapsed(session.started)} ago.`,
+        ]);
+    }
+}
+
+async function handleTelegramGrant(request) {
+    const {username, name, chatId} = request;
+    if (username !== config.admin) {
+        await sendTelegramReply(request, 'html', [
+            `You are not the admin user, please ask ${config.admin}.`
+        ]);
+    } else {
+        const [role, user] = (request.text.match(/^\/grant ([a-z_]+) to ([a-z_]+)$/) || []).slice(1);
+        if (!user) {
             await sendTelegramReply(request, 'html', [
-                `You can login via https://${[config.domain, 'authbot', 'login', username, token].join('/')}.`,
-                `This link expires in ${config.loginExpire} seconds.`,
-                `Powered by https://github.com/evanx/authbot.`
+                `Try /grant <code>role</code> to <code>username</code>`,
+                `e.g. <code>/grant admin to other_user</code>`
             ]);
         } else {
             await sendTelegramReply(request, 'html', [
-                `Apologies, the login command failed.`,
-            ]);
-        }
-    }
-
-    async function handleTelegramListSessions(request) {
-        const {username, name, chatId} = request;
-        const sessionListKey = [config.namespace, 'session', username, 'l'].join(':');
-        const [sessionIds] = await multiExecAsync(client, multi => {
-            multi.lrange(sessionListKey, 0, 5);
-        });
-        if (!sessionIds.length) {
-            await sendTelegramReply(request, 'html', [
-                `No sessions found.`
-            ]);
-            return;
-        }
-        const sessions = lodash.compact(await multiExecAsync(client, multi => {
-            sessionIds.forEach(sessionId => {
-                const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
-                multi.hgetall(sessionKey);
-            });
-        }));
-        const session0 = lodash.first(sessions);
-        const sessionl = lodash.last(sessions);
-        if (session0) {
-            await sendTelegramReply(request, 'html', [
-                `Your latest session was created ${formatElapsed(session0.started)} ago.`,
-            ]);
-        } else {
-            await sendTelegramReply(request, 'html', [
-                `Your latest session has expired.`,
-            ]);
-        }
-    }
-
-    async function handleTelegramLogout(request) {
-        const {username, name, chatId} = request;
-        const sessionListKey = [config.namespace, 'session', username, 'l'].join(':');
-        const [sessionIds] = await multiExecAsync(client, multi => {
-            multi.lrange(sessionListKey, 0, 5);
-        });
-        if (!sessionIds.length) {
-            await sendTelegramReply(request, 'html', [
-                `No sessions found.`
-            ]);
-            return;
-        }
-        const sessions = lodash.compact(await multiExecAsync(client, multi => {
-            sessionIds.forEach(sessionId => {
-                const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
-                multi.hgetall(sessionKey);
-            });
-        }));
-        await multiExecAsync(client, multi => {
-            sessionIds.forEach(sessionId => {
-                const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
-                multi.del(sessionKey);
-            });
-        });
-        if (sessions.length === 0) {
-            await sendTelegramReply(request, 'html', [
-                `No active sessions.`,
-            ]);
-        } else if (sessions.length === 1) {
-            const session = sessions[0];
-            await sendTelegramReply(request, 'html', [
-                `The session that was created ${formatElapsed(session.started)} ago, has now been deleted.`,
-            ]);
-        } else {
-            const session0 = sessions[0];
-            const session = lodash.last(sessions);
-            await sendTelegramReply(request, 'html', [
-                `${sessions.length} sessions have been deleted.`,
-                `The latest was created ${formatElapsed(session0.started)} ago.`,
-                `The oldest was created ${formatElapsed(session.started)} ago.`,
-            ]);
-        }
-    }
-
-    async function handleTelegramGrant(request) {
-        const {username, name, chatId} = request;
-        if (username !== config.admin) {
-            await sendTelegramReply(request, 'html', [
-                `You are not the admin user, please ask ${config.admin}.`
-            ]);
-        } else {
-            const [role, user] = (request.text.match(/^\/grant ([a-z_]+) to ([a-z_]+)$/) || []).slice(1);
-            if (!user) {
-                await sendTelegramReply(request, 'html', [
-                    `Try /grant <code>role</code> to <code>username</code>`,
-                    `e.g. <code>/grant admin to other_user</code>`
-                ]);
-            } else {
-                await sendTelegramReply(request, 'html', [
-                    `You wish to grant role <code>${role}</code> to <code>${user}</code>.`,
-                    `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
-                ]);
-            }
-        }
-    }
-
-    async function handleTelegramListUsers(request) {
-        const {username, name, chatId} = request;
-        if (username !== config.admin) {
-            await sendTelegramReply(request, 'html', [
-                `You are not the admin user, please ask ${config.admin}.`
-            ]);
-        } else {
-            await sendTelegramReply(request, 'html', [
-                `You wish to list users and their roles.`,
+                `You wish to grant role <code>${role}</code> to <code>${user}</code>.`,
                 `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
             ]);
         }
     }
+}
 
-    async function handleTelegramRevoke(request) {
-        const {username, name, chatId} = request;
-        if (username !== config.admin) {
+async function handleTelegramListUsers(request) {
+    const {username, name, chatId} = request;
+    if (username !== config.admin) {
+        await sendTelegramReply(request, 'html', [
+            `You are not the admin user, please ask ${config.admin}.`
+        ]);
+    } else {
+        await sendTelegramReply(request, 'html', [
+            `You wish to list users and their roles.`,
+            `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
+        ]);
+    }
+}
+
+async function handleTelegramRevoke(request) {
+    const {username, name, chatId} = request;
+    if (username !== config.admin) {
+        await sendTelegramReply(request, 'html', [
+            `You are not the admin user, please ask ${config.admin}.`
+        ]);
+    } else {
+        const [role, user] = (request.text.match(/^\/revoke ([a-z_]+) from ([a-z_]+)$/) || []).slice(1);
+        if (!user) {
             await sendTelegramReply(request, 'html', [
-                `You are not the admin user, please ask ${config.admin}.`
+                `Try /revoke <code>role</code> from <code>username</code>`,
+                `e.g. <code>revoke admin from other_user</code>`
             ]);
         } else {
-            const [role, user] = (request.text.match(/^\/revoke ([a-z_]+) from ([a-z_]+)$/) || []).slice(1);
-            if (!user) {
-                await sendTelegramReply(request, 'html', [
-                    `Try /revoke <code>role</code> from <code>username</code>`,
-                    `e.g. <code>revoke admin from other_user</code>`
-                ]);
-            } else {
-                await sendTelegramReply(request, 'html', [
-                    `You wish to revoke role <code>${role}</code> from <code>${user}</code>.`,
-                    `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
-                ]);
-            }
+            await sendTelegramReply(request, 'html', [
+                `You wish to revoke role <code>${role}</code> from <code>${user}</code>.`,
+                `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
+            ]);
         }
     }
+}
 
-    async function sendTelegramReply(request, format, ...content) {
-        if (request.chatId && request.name) {
-            await sendTelegram(request.chatId, format,
-                `Thanks, ${request.name}.`,
-                ...content
-            );
-        } else {
-            logger.error('sendTelegramReply', request);
-        }
+async function sendTelegramReply(request, format, ...content) {
+    if (request.chatId && request.name) {
+        await sendTelegram(request.chatId, format,
+            `Thanks, ${request.name}.`,
+            ...content
+        );
+    } else {
+        logger.error('sendTelegramReply', request);
     }
+}
 
-    async function sendTelegram(chatId, format, ...content) {
-        logger.debug('sendTelegram', chatId, format, content);
-        try {
-            const text = lodash.trim(lodash.flatten(content).join(' '));
-            assert(chatId, 'chatId');
-            let uri = `sendMessage?chat_id=${chatId}`;
-            uri += '&disable_notification=true';
-            if (format === 'markdown') {
-                uri += `&parse_mode=Markdown`;
-            } else if (format === 'html') {
-                uri += `&parse_mode=HTML`;
-            }
-            uri += `&text=${encodeURIComponent(text)}`;
-            const url = [state.botUrl, uri].join('/');
-            const options = {timeout: config.sendTimeout};
-            logger.info('sendTelegram url', url, {options});
-            const res = await fetch(url, options);
-            if (res.status !== 200) {
-                logger.warn('sendTelegram status', res.status, {chatId, url});
-            }
-        } catch (err) {
-            logger.error(err);
+async function sendTelegram(chatId, format, ...content) {
+    logger.debug('sendTelegram', chatId, format, content);
+    try {
+        const text = lodash.trim(lodash.flatten(content).join(' '));
+        assert(chatId, 'chatId');
+        let uri = `sendMessage?chat_id=${chatId}`;
+        uri += '&disable_notification=true';
+        if (format === 'markdown') {
+            uri += `&parse_mode=Markdown`;
+        } else if (format === 'html') {
+            uri += `&parse_mode=HTML`;
         }
+        uri += `&text=${encodeURIComponent(text)}`;
+        const url = [state.botUrl, uri].join('/');
+        const options = {timeout: config.sendTimeout};
+        logger.info('sendTelegram url', url, {options});
+        const res = await fetch(url, options);
+        if (res.status !== 200) {
+            logger.warn('sendTelegram status', res.status, {chatId, url});
+        }
+    } catch (err) {
+        logger.error(err);
     }
+}
 
-    async function end() {
-        client.quit();
-        if (state.sub) {
-            state.sub.quit();
-        }
-        if (state.server) {
-            state.server.close();
-        }
+async function end() {
+    client.quit();
+    if (state.sub) {
+        state.sub.quit();
     }
+    if (state.server) {
+        state.server.close();
+    }
+}
 
-    function formatElapsed(started) {
-        const elapsedMillis = Date.now() - started;
-        const elapsedSeconds = Math.floor(elapsedMillis/1000);
-        const elapsedMinutes = Math.floor(elapsedSeconds/60);
-        const elapsedHours = Math.floor(elapsedMinutes/60);
-        const elapsedDays = Math.floor(elapsedHours/24);
-        if (elapsedDays > 1) {
-            return `${elapsedDays} days`;
-        }
-        if (elapsedHours > 25) {
-            return `1 day and ${elapsedHours - 24} hours`;
-        }
-        if (elapsedMinutes >= 120) {
-            return `${elapsedHours} hours`;
-        }
-        if (elapsedMinutes > 61) {
-            return `1 hour and ${elapsedMinutes - 60} minutes`;
-        }
-        if (elapsedMinutes > 1) {
-            return `${elapsedMinutes} minutes`;
-        }
-        if (elapsedSeconds > 1) {
-            return `${elapsedSeconds} seconds`;
-        }
-        return `a second`;
+function formatTime(date) {
+    return [date.getHours(), date.getMinutes(), date.getSeconds()].map(v => ('0' + v).slice(-2)).join(':');
+}
+
+function formatElapsed(started) {
+    const elapsedMillis = Date.now() - started;
+    const elapsedSeconds = Math.floor(elapsedMillis/1000);
+    const elapsedMinutes = Math.floor(elapsedSeconds/60);
+    const elapsedHours = Math.floor(elapsedMinutes/60);
+    const elapsedDays = Math.floor(elapsedHours/24);
+    if (elapsedDays > 1) {
+        return `${elapsedDays} days`;
     }
+    if (elapsedHours > 25) {
+        return `1 day and ${elapsedHours - 24} hours`;
+    }
+    if (elapsedMinutes >= 120) {
+        return `${elapsedHours} hours`;
+    }
+    if (elapsedMinutes > 61) {
+        return `1 hour and ${elapsedMinutes - 60} minutes`;
+    }
+    if (elapsedMinutes > 1) {
+        return `${elapsedMinutes} minutes`;
+    }
+    if (elapsedSeconds > 1) {
+        return `${elapsedSeconds} seconds`;
+    }
+    return `a second`;
+}

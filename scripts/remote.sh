@@ -9,8 +9,8 @@ do
   if [ -n "$file" ]
   then
     redis-cli get $ns:$file > tmp/$file
-    redis-cli publish $ns:adv $file
-    redis-cli lpush $ns:adv $file
+    redis-cli publish $ns:res $file
+    redis-cli lpush $ns:res $file
     ls -l tmp/$file
     head tmp/$file
     echo $ns:adv $file 
