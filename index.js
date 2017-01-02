@@ -492,6 +492,11 @@ async function handleLogin(ctx) {
     });
     ctx.cookies.set('sessionId', sessionId, {maxAge: config.cookieExpire, domain: config.domain, path: '/'});
     ctx.redirect(config.redirectAuth);
+    if (session.chatId && session.name) {
+        await sendTelegram(session.chatId, 'html', [
+            `Thanks ${session.name}, you have logged in.`
+        ]);
+    }
 }
 
 async function handleTelegramMessage(message) {
