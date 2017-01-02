@@ -177,9 +177,10 @@ if (configFile && process.env.NODE_ENV === 'development') {
         `login - login to https://${config.domain}`,
         `sessions - list your recent sessions`,
         `logout - force logout your recent sessions`,
-        `grant - role to user`,
-        `revoke - role from user`,
-        `users - list users and their granted roles`,
+        `grant - @user #role - grant user as role e.g. admin`,
+        `revoke - @user`,
+        `roles - list roles`,
+        `users - #role - list users for role e.g. admin`,
         ``
     ].join('\n'));
 }
@@ -545,6 +546,8 @@ async function handleTelegramMessage(message) {
         return handleTelegramListSessions(request);
     } else if (request.text.startsWith('/user')) {
         return handleTelegramListUsers(request);
+    } else if (request.text.startsWith('/role')) {
+        return handleTelegramListRoles(request);
     } else if (request.text.startsWith('/grant')) {
         return handleTelegramGrant(request);
     } else if (request.text.startsWith('/revoke')) {
@@ -659,59 +662,202 @@ async function handleTelegramLogout(request) {
     }
 }
 
+async function validateAdminUser(username) {
+    if (username === config.admin) {
+        return true;
+    }
+    const userKey = [config.namespace, 'user', username, 'h'].join(':');
+    const [userHashes] = await multiExecAsync(client, multi => {
+        multi.hgetall(userKey);
+    });
+    if (!userHashes) {
+        await sendTelegramReply(request, 'html', [
+            `You are currently not an admin user.`,
+            `Please ask @${config.admin} to <code>/grant @${username} #admin<code>.`
+        ]);
+        return false;
+    }
+    if (userHashes.role !== 'admin') {
+        await sendTelegramReply(request, 'html', [
+            `Your role is #${userHashes.role}.`,
+            `Please ask @${config.admin} to <code>/grant @${username} #admin<code>.`
+        ]);
+        return false;
+    }
+    return true;
+}
+
 async function handleTelegramGrant(request) {
     const {username, name, chatId} = request;
-    if (username !== config.admin) {
+    if (!await validateAdminUser(username)) {
+        return;
+    }
+    const [user, role] = (request.text.match(/^\/grant @([a-z_]+) #([a-z_]+)$/) || []).slice(1);
+    if (!user) {
         await sendTelegramReply(request, 'html', [
-            `You are not the admin user, please ask ${config.admin}.`
+            `Try <code>/grant @username #role</code>`
         ]);
     } else {
-        const [role, user] = (request.text.match(/^\/grant ([a-z_]+) to ([a-z_]+)$/) || []).slice(1);
-        if (!user) {
-            await sendTelegramReply(request, 'html', [
-                `Try /grant <code>role</code> to <code>username</code>`,
-                `e.g. <code>/grant admin to other_user</code>`
-            ]);
-        } else {
-            await sendTelegramReply(request, 'html', [
-                `You wish to grant role <code>${role}</code> to <code>${user}</code>.`,
-                `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
-            ]);
-        }
+        const userKey = [config.namespace, 'user', user, 'h'].join(':');
+        const usersKey = [config.namespace, 'user', 's'].join(':');
+        const rolesKey = [config.namespace, 'role', 's'].join(':');
+        const roleKey = [config.namespace, 'role', role, 's'].join(':');
+        await multiExecAsync(client, multi => {
+            multi.hmset(userKey, {role});
+            multi.sadd(usersKey, user);
+            multi.sadd(rolesKey, role);
+            multi.sadd(roleKey, user);
+        });
+        await sendTelegramReply(request, 'html', [
+            `You have granted role #${role} to @${user}.`,
+        ]);
     }
 }
 
 async function handleTelegramListUsers(request) {
     const {username, name, chatId} = request;
-    if (username !== config.admin) {
+    if (!await validateAdminUser(username)) {
+        return;
+    }
+    const [role] = (request.text.match(/^\/users #([a-z_]+)$/) || []).slice(1);
+    if (role) {
+        const roleKey = [config.namespace, 'role', role, 's'].join(':');
+        const [users] = await multiExecAsync(client, multi => {
+            multi.smembers(roleKey);
+        });
+        const records = await multiExecAsync(client, multi => {
+            users.forEach(user => multi.hgetall([config.namespace, 'user', user, 'h'].join(':')));
+        });
+        const userRepo = {};
+        users.forEach((user, index) => userRepo[user] = records[index]);
+        if (users.length === 0) {
+            await sendTelegramReply(request, 'html', [
+                `There are no users for role #${role}.`
+            ]);
+        } else if (users.length === 1) {
+            await sendTelegramReply(request, 'html', [
+                `There are is one user @${users[0]} for role #${role}.`
+            ]);
+        } else {
+            await sendTelegramReply(request, 'html', [
+                `There are ${users.length} users for role #${role}: ` +
+                users.map(user => `${user}`).join(', ')
+            ]);
+        }
+    } else {
+        const usersKey = [config.namespace, 'user', 's'].join(':');
+        const [users] = await multiExecAsync(client, multi => {
+            multi.smembers(usersKey);
+        });
+        const records = await multiExecAsync(client, multi => {
+            users.forEach(user => multi.hgetall([config.namespace, 'user', user, 'h'].join(':')));
+        });
+        const userRepo = {};
+        users.forEach((user, index) => userRepo[user] = (records[index] || {role: 'none'}));
+        if (users.length === 0) {
+            await sendTelegramReply(request, 'html', [
+                `There are no users.`
+            ]);
+        } else if (users.length === 1) {
+            const user = users[0];
+            const role = userRepo[user].role;
+            await sendTelegramReply(request, 'html', [
+                `There is one user @${user} with role #${role}.`
+            ]);
+        } else {
+            await sendTelegramReply(request, 'html', [
+                `There are ${users.length} users: ` +
+                users.map(user => `@${user} #${userRepo[user].role}`).join(', ')
+            ]);
+        }
+    }
+}
+
+async function handleTelegramListRoles(request) {
+    const {username, name, chatId} = request;
+    if (!await validateAdminUser(username)) {
+        return;
+    }
+    const rolesKey = [config.namespace, 'role', 's'].join(':');
+    const [roles] = await multiExecAsync(client, multi => {
+        multi.smembers(rolesKey);
+    });
+    const results = await multiExecAsync(client, multi => {
+        roles.forEach(role => multi.members([config.namespace, 'role', role, 's'].join(':')));
+    });
+    const roleRepo = {};
+    roles.forEach((role, index) => roleRepo[role] = results[index]);
+    const activeRoles = roles.filter(role => roleRepo[role].length > 0);
+    if (activeRoles.length === 0) {
         await sendTelegramReply(request, 'html', [
-            `You are not the admin user, please ask ${config.admin}.`
+            `There are no active roles.`
+        ]);
+    } else if (activeRoles.length === 1) {
+        const role = activeRoles[0];
+        const users = roleRepo[role];
+        await sendTelegramReply(request, 'html', [
+            `There is one active role #${role} with ${users.length} users: ` +
+            users.map(user => `@${user}`).join(', ')
         ]);
     } else {
         await sendTelegramReply(request, 'html', [
-            `You wish to list users and their roles.`,
-            `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
+            `There are ${activeRoles.length} active roles: ` +
+            activeRoles.map(role => `#${role} (${roleRepo[role].length})`).join(', ')
         ]);
     }
 }
 
 async function handleTelegramRevoke(request) {
     const {username, name, chatId} = request;
-    if (username !== config.admin) {
+    if (!await validateAdminUser(username)) {
+        return;
+    }
+    const [user] = (request.text.match(/^\/revoke @([a-z_]+)$/) || []).slice(1);
+    if (!user) {
         await sendTelegramReply(request, 'html', [
-            `You are not the admin user, please ask ${config.admin}.`
+            `Try <code>/revoke @username</code>`
+        ]);
+        return;
+    }
+    const userKey = [config.namespace, 'user', user, 'h'].join(':');
+    const usersKey = [config.namespace, 'user', 's'].join(':');
+    const [userHashes] = await multiExecAsync(client, multi => {
+        multi.hgetall(userKey);
+        multi.del(userKey);
+        multi.srem(usersKey, user);
+    });
+    if (!userHashes) {
+        await sendTelegramReply(request, 'html', [
+            `User <code>@${user}</code> not found.`,
+        ]);
+    } else if (!userHashes.role) {
+        await sendTelegramReply(request, 'html', [
+            `User @${user} has been revoked.`,
         ]);
     } else {
-        const [role, user] = (request.text.match(/^\/revoke ([a-z_]+) from ([a-z_]+)$/) || []).slice(1);
-        if (!user) {
+        const role = userHashes.role;
+        const roleKey = [config.namespace, 'role', role, 's'].join(':');
+        await multiExecAsync(client, multi => {
+            multi.srem(roleKey, user);
+        });
+        const size = await multiExecAsync(client, multi => {
+            multi.scard(roleKey);
+        });
+        if (!size) {
+            const rolesKey = [config.namespace, 'role', 's'].join(':');
+            await multiExecAsync(client, multi => {
+                multi.srem(rolesKey, role);
+            });
             await sendTelegramReply(request, 'html', [
-                `Try /revoke <code>role</code> from <code>username</code>`,
-                `e.g. <code>revoke admin from other_user</code>`
+                `User @${user} has been revoked. Role #${role} is now empty.`,
+            ]);
+        } else if (size === 1) {
+            await sendTelegramReply(request, 'html', [
+                `User @${user} has been revoked. Role #${role} has one remaining user.`,
             ]);
         } else {
             await sendTelegramReply(request, 'html', [
-                `You wish to revoke role <code>${role}</code> from <code>${user}</code>.`,
-                `Oh apologies, this feature not yet implemented. Please check again from Monday 3rd January.`
+                `User @${user} has been revoked. Role #${role} has ${size} remaining users.`
             ]);
         }
     }
