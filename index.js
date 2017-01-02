@@ -562,15 +562,22 @@ async function handleTelegramListSessions(request) {
             multi.hgetall(sessionKey);
         });
     }));
-    const session0 = lodash.first(sessions);
-    const sessionl = lodash.last(sessions);
-    if (session0) {
-        await sendTelegramReply(request, 'html', [
-            `Your latest session was created ${formatElapsed(session0.started)} ago.`,
-        ]);
-    } else {
+    if (sessions.length === 0) {
         await sendTelegramReply(request, 'html', [
             `Your latest session has expired.`,
+        ]);
+    } else if (sessions.length === 1) {
+        const session0 = lodash.first(sessions);
+        await sendTelegramReply(request, 'html', [
+            `Your session was created ${formatElapsed(session0.started)} ago.`,
+        ]);
+    } else {
+        const session0 = lodash.first(sessions);
+        const sessionl = lodash.last(sessions);
+        await sendTelegramReply(request, 'html', [
+            `You have ${sessions.length} active sessions.`,
+            `The latest was created ${formatElapsed(session0.started)} ago.`,
+            `The oldest was created ${formatElapsed(sessionl.started)} ago.`,
         ]);
     }
 }
@@ -610,11 +617,11 @@ async function handleTelegramLogout(request) {
         ]);
     } else {
         const session0 = sessions[0];
-        const session = lodash.last(sessions);
+        const sessionl = lodash.last(sessions);
         await sendTelegramReply(request, 'html', [
             `${sessions.length} sessions have been deleted.`,
             `The latest was created ${formatElapsed(session0.started)} ago.`,
-            `The oldest was created ${formatElapsed(session.started)} ago.`,
+            `The oldest was created ${formatElapsed(sessionl.started)} ago.`,
         ]);
     }
 }
