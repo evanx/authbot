@@ -343,3 +343,5 @@ address=`
   docker inspect --format '{{ .NetworkSettings.Networks.redis.IPAddress }}' authbot-test
 `
 ```
+
+That address is set on the API gateway e.g. Nginx, to route HTTP requests for the domain and `/authbot` location to the bot.

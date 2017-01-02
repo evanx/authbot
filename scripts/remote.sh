@@ -1,17 +1,14 @@
-
+set -u -e
 mkdir -p tmp
-
-ns=restart:authbot
+ns='restart:authbot'
 redis-cli del $ns:req
-redis-cli del $ns:adv
-while [ 1 ]
+while true
 do
   file=`redis-cli brpop $ns:req 15 | tail -n +2`
   if [ -n "$file" ]
   then
     redis-cli get $ns:$file > tmp/$file
-    redis-cli lpush $ns:adv $file
+    redis-cli publish $ns:adv $file
     echo $ns:adv $file
   fi
 done
-

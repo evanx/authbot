@@ -288,6 +288,7 @@ async function startSubscribeEnd() {
             }
         }
     });
+    state.sub.subscribe(configFile.endChannel);
 }
 
 async function startHttpServer() {

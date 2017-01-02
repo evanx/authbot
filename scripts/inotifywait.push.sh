@@ -1,9 +1,10 @@
 
   ns='restart:authbot'
+  file='index.js'
   while true
   do 
-    inotifywait index.js -qe close_write
-    cat index.js | redis-cli -x -p 6333 set $ns:index.js
-    redis-cli -p 6333 lpush $ns:req index.js
+    inotifywait $file -qe close_write
+    cat $file | redis-cli -x -p 6333 set $ns:$file
+    redis-cli -p 6333 lpush $ns:req $file
   done
 
