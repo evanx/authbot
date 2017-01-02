@@ -57,7 +57,7 @@ We run the app in a loop so that it will auto restart.
 ```shell
 while true
 do
-  configFile=~/private-config/authtest.webserva.com/development.js \
+  configFile=~/private-config/authtest.webserva.com/authbot/development.js \
   npm run tmp
 done
 ```

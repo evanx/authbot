@@ -278,12 +278,10 @@ async function startSubscribeSrc() {
 }
 
 async function startSubscribeEnd() {
-    assert(configFile.endQueue, 'endQueue');
-    client.lpush(configFile.endQueue, config.port);
     state.sub = redis.createClient();
     state.sub.on('message', (channel, message) => {
         if (channel === configFile.endChannel) {
-            if (parseInt(message) !== config.port) {
+            if (message === configFile.endMessage) {
                 end();
             }
         }
