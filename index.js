@@ -387,10 +387,9 @@ async function handleHome(ctx) {
     });
 }
 
-async function getSession(ctx) {
-    const sessionId = ctx.cookies.get('sessionId');
+async function getSession(sessionId) {
     if (!sessionId) {
-        throw new Error('No cookie');
+        throw new Error('No sessionId');
     }
     const sessionKey = [config.namespace, 'session', sessionId, 'h'].join(':');
     const [session] = await multiExecAsync(client, multi => {
@@ -404,9 +403,9 @@ async function getSession(ctx) {
 }
 
 async function handleSession(ctx) {
-    const sessionId = ctx.cookies.get('sessionId');
+    const {username, sessionId} = ctx.params;
     const session = await getSession(sessionId);
-    if (session && session.username === ctx.param.username
+    if (session && session.username === username
         && (Date.now() - session.started)/1000 < config.loginExire
     ) {
         ctx.status = 200;
@@ -419,6 +418,9 @@ async function handleSession(ctx) {
 
 async function handleAuth(ctx) {
     const sessionId = ctx.cookies.get('sessionId');
+    if (!sessionId) {
+        throw new Error('No cookie');
+    }
     const session = await getSession(sessionId);
     renderPage(ctx, {
         heading: `Welcome ${session.name}`,
@@ -722,7 +724,11 @@ async function end() {
 }
 
 function formatTime(date) {
-    return [date.getHours(), date.getMinutes(), date.getSeconds()].map(v => ('0' + v).slice(-2)).join(':');
+    return [
+        date.getHours(), date.getMinutes(), date.getSeconds()
+    ].map(
+        v => ('0' + v).slice(-2)
+    ).join(':');
 }
 
 function formatElapsed(started) {
