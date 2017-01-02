@@ -38,8 +38,7 @@ The app is configured with an `endChannel`
 endChannel: 'restart:authbot:adv',
 endMessage: 'index.js',
 ```
-
-The app can subscribe to `endChannel` and exit when an updated `tmp/index.js` is available.
+The app will subscribe to `endChannel` and exit when an updated `tmp/index.js` is available.
 ```javascript
 async function startSubscribeEnd() {
     state.sub = redis.createClient();
@@ -54,7 +53,7 @@ async function startSubscribeEnd() {
 }
 ```
 
-Then on the development box, we run the app in a loop so that it will auto restart.
+We run the app in a loop so that it will auto restart.
 ```shell
 while true
 do
