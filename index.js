@@ -320,6 +320,9 @@ async function startHttpServer() {
         api.get('/noauth', async ctx => {
             await handleNoAuth(ctx);
         });
+        api.get('/noauth/:reason', async ctx => {
+            await handleNoAuth(ctx);
+        });
         api.get('/', async ctx => {
             await handleHome(ctx);
         });
@@ -375,11 +378,17 @@ async function handleError(ctx, err) {
 }
 
 async function handleNoAuth(ctx) {
+    const headings = {
+        logout: 'Logged out',
+        login: 'Login expired',
+        session: 'Session expired or logged out',
+        cookie: 'No cookie or logged out',
+    };
+    const heading = (!ctx.params.reason? null: headings[ctx.params.reason]) || `No Auth`;
+    const paragraphs = [`Use {botLink} to login again.`];
     renderPage(ctx, {
-        heading: `No Auth`,
-        paragraphs: [
-            `Use {botLink} to login`
-        ]
+        heading,
+        paragraphs
     });
 }
 
@@ -390,6 +399,10 @@ async function handleHome(ctx) {
             `Use {botLink} to login`
         ]
     });
+}
+
+function getRedirectNoAuth(reason) {
+    return [config.redirectNoAuth, reason].join('/');
 }
 
 async function getSession(sessionId) {
@@ -446,6 +459,7 @@ async function handleLogout(ctx) {
             multi.hgetall(sessionKey);
             multi.del(sessionKey);
         });
+        ctx.cookies.set('sessionId', '', {expires: new Date(0), domain: config.domain, path: '/'});
         if (session && session.username) {
             const loginKey = [config.namespace, 'login', session.username, 'h'].join(':');
             await multiExecAsync(client, multi => {
@@ -458,10 +472,13 @@ async function handleLogout(ctx) {
                     ]);
                 }
             }
+            ctx.redirect(getRedirectNoAuth('logout'));
+        } else {
+            ctx.redirect(getRedirectNoAuth('session'));
         }
-        ctx.cookies.set('sessionId', '', {expires: new Date(0), domain: config.domain, path: '/'});
+    } else {
+        ctx.redirect(getRedirectNoAuth('cookie'));
     }
-    ctx.redirect(config.redirectNoAuth);
 }
 
 async function handleLogin(ctx) {
@@ -480,10 +497,10 @@ async function handleLogin(ctx) {
     if (!login) {
         const sessionId = ctx.cookies.get('sessionId');
         if (sessionId) {
-            logger.debug('handleLogin', {sessionId}, config.redirectNoAuth);
+            logger.debug('handleLogin', {sessionId});
         }
         ctx.status = 403;
-        ctx.redirect(config.redirectNoAuth);
+        ctx.redirect(getRedirectNoAuth('login'));
         return;
     }
     assert.equal(login.username, username, 'username');
