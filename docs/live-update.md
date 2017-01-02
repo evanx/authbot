@@ -7,7 +7,7 @@ A Telegram bot for auth and login to a web domain.
 - configure and deploy this auth bot service on your domain for location `/authbot`
 - set the bot webhook via `api.telegram.org` to `/authbot`
 - as a user, send the command `/login`
-- your authbot will reply with a magic login link to itself e.g. `/authbot/in/${user}/${token}`
+- your authbot will reply with a magic login link to itself e.g. `/authbot/login/${user}/${token}`
 - the authbot HTTP handler will enroll the session in Redis
 - the authbot will redirect e.g. `/auth` for your actual site, with the session cookie set
 - your site can verify the session cookie via Redis and get the Telegram username and role
@@ -39,7 +39,7 @@ async function startHttpServer() {
             await handleMessage(ctx.request.body);
         }
     });
-    api.get('/authbot/in/:username/:token', async ctx => {
+    api.get('/authbot/login/:username/:token', async ctx => {
         await handleIn(ctx);
     });
     api.get('/authbot/logout', async ctx => {
@@ -47,7 +47,7 @@ async function startHttpServer() {
     });
 ```
 
-The `/authbot/in/` HTTP handler will set the session cookie:
+The `/authbot/login/` HTTP handler will set the session cookie:
 ```javascript
 assert.equal(login.username, username, 'username');
 assert.equal(login.token, token, 'token');
@@ -78,9 +78,9 @@ api.get('/noauth', async ctx => { // authentication failed
     await handleNoAuth(ctx);
 });
 ```
-where `/auth` and `/noauth` are redirects from `/authbot/in`
+where `/auth` and `/noauth` are redirects from `/authbot/login`
 
-The login is created in Redis by the Telegram bot, which provides the `/authbot/in/` "magic link."
+The login is created in Redis by the Telegram bot, which provides the `/authbot/login/` "magic link."
 ```javascript
 async function handleTelegramLogin(request) {
     const {username, name, chatId} = request;

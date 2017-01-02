@@ -30,6 +30,11 @@ const configMeta = {
         description: 'HTTPS web domain to auth access',
         example: 'authdemo.webserva.com'
     },
+    demo: {
+        required: false,
+        description: 'Serve site pages for the demo',
+        example: true
+    },
     bot: {
         description: 'Telegram Bot name i.e. this authbot',
         example: 'ExAuthDemoBot',
@@ -80,23 +85,25 @@ const config = Object.keys(configMeta)
     }
     return config;
 }, configDefault);
-if (missingConfigKeys.length) {
-    const sp = Array(3).join(' ');
-    console.error(`Missing configs:`);
-    console.error(lodash.flatten(missingConfigKeys.map(key => {
-        const meta = configMeta[key];
-        const lines = [`${sp}${key} e.g. '${meta.example}'`];
-        if (meta.description) {
-            lines.push(`${sp+sp}"${meta.description}"`);
-        }
-        if (meta.info) {
-            lines.push(`${sp+sp+sp}see ${meta.info}`);
-        }
-        if (meta.hint) {
-            lines.push(`${sp+sp+sp}see ${meta.hint}`);
-        }
-        return lines;
-    })).join('\n'));
+
+const sp = Array(3).join(' ');
+
+function formatHelp(configKey) {
+    const meta = configMeta[configKey];
+    const lines = [`${sp}${configKey} e.g. '${meta.example}'`];
+    if (meta.description) {
+        lines.push(`${sp+sp}"${meta.description}"`);
+    }
+    if (meta.info) {
+        lines.push(`${sp+sp+sp}see ${meta.info}`);
+    }
+    if (meta.hint) {
+        lines.push(`${sp+sp+sp}see ${meta.hint}`);
+    }
+    return lines;
+}
+
+function printStartHelp() {
     console.error('\nExample start:');
     console.error([
         ...configKeys.map(key => {
@@ -108,6 +115,9 @@ if (missingConfigKeys.length) {
         }),
         `${sp}npm start`
     ].join('\n'));
+}
+
+function printDockerHelp() {
     console.error('\nTest Docker build:');
     console.error([
         `${sp}docker build -t authbot:test git@github.com:evanx/authbot.git`
@@ -124,6 +134,15 @@ if (missingConfigKeys.length) {
         }),
         `${sp+sp}${config.namespace}-test`
     ].join('\n'));
+}
+
+if (missingConfigKeys.length) {
+    console.error(`Missing configs:`);
+    console.error(lodash.flatten(missingConfigKeys.map(
+        configKey => formatHelp(configKey)
+    )).join('\n'));
+    printStartHelp();
+    printDockerHelp();
     process.exit(1);
 }
 
@@ -148,6 +167,7 @@ if (configFile && process.env.NODE_ENV === 'development') {
         'npm run development'
     ].join(' '));
     console.log([
+        ``,
         `Bot commands:`,
         ``,
         `login - login to https://${config.domain}`,
@@ -218,7 +238,7 @@ async function start() {
 }
 
 async function startSubscribeHub() {
-    assert(config.hubNamespace, 'hubNamespace');
+    assert(configFile.hubNamespace, 'hubNamespace');
     state.sub = redis.createClient(config.hubRedis);
     state.sub.on('message', (channel, message) => {
         if (channel.endsWith(config.secret)) {
@@ -228,7 +248,7 @@ async function startSubscribeHub() {
             logger.warn('hubRedis', {channel});
         }
     });
-    state.sub.subscribe([config.hubNamespace, config.secret].join(':'));
+    state.sub.subscribe([configFile.hubNamespace, config.secret].join(':'));
 }
 
 async function startSubscribeSrc() {
@@ -277,21 +297,28 @@ async function startHttpServer() {
             await handleTelegramMessage(ctx.request.body);
         }
     });
-    api.get('/authbot/in/:username/:token', async ctx => {
+    api.get('/authbot/login/:username/:token', async ctx => {
         await handleLogin(ctx);
     });
+    if (config.sessionHttp) {
+        api.get('/authbot-session/:username/:sessionId', async ctx => {
+            await handleSession(ctx);
+        });
+    }
     api.get('/authbot/logout', async ctx => {
         await handleLogout(ctx);
     });
-    api.get('/auth', async ctx => {
-        await handleAuth(ctx);
-    });
-    api.get('/noauth', async ctx => {
-        await handleNoAuth(ctx);
-    });
-    api.get('/', async ctx => {
-        await handleHome(ctx);
-    });
+    if (config.demo) {
+        api.get('/auth', async ctx => {
+            await handleAuth(ctx);
+        });
+        api.get('/noauth', async ctx => {
+            await handleNoAuth(ctx);
+        });
+        api.get('/', async ctx => {
+            await handleHome(ctx);
+        });
+    }
     app.use(bodyParser());
     app.use(async (ctx, next) => {
         try {
@@ -372,8 +399,22 @@ async function getSession(ctx) {
     return session;
 }
 
+async function handleSession(ctx) {
+    const sessionId = ctx.cookies.get('sessionId');
+    const session = await getSession(sessionId);
+    if (session && session.username === ctx.param.username &&
+        (Date.now() - session.started)/1000 < config.loginExire) {
+        ctx.status = 200;
+        ctx.body = 'Authenticated';
+    } else {
+        ctx.status = 403;
+        ctx.body = 'Access prohibited';
+    }
+}
+
 async function handleAuth(ctx) {
-    const session = await getSession(ctx);
+    const sessionId = ctx.cookies.get('sessionId');
+    const session = await getSession(sessionId);
     renderPage(ctx, {
         heading: `Welcome ${session.name}`,
         paragraphs: [

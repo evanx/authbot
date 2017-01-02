@@ -3,15 +3,6 @@
 
 A Telegram bot for auth and login to a web domain.
 
-- create an auth bot for your domain e.g. `@someDomainAuthBot` via command `/newbot` to `@BotFather`
-- configure and deploy this auth bot service on your domain for location `/authbot`
-- set the bot webhook via `api.telegram.org` to `/authbot`
-- as a user, send the command `/login`
-- your authbot will reply with a magic login link to itself e.g. `/authbot/in/${user}/${token}`
-- the authbot HTTP handler will create the session in Redis, set session cookie on the HTTP response, and redirect e.g. `/auth` for your actual site
-- your site can verify the session cookie via Redis and get the Telegram username and role
-- the original authoritative (admin) Telegram username can authorise other users
-
 ![screenshot](https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-bot.png)  
 <hr>
 
@@ -21,6 +12,20 @@ This provides a relatively easy way to provide authentication and authorisation 
 - works great on mobile, use the Telegram app
 - works great on desktop, use https://web.telegram.org
 - minimal code required, just verify the session cookie via Redis
+
+Deploy a bot to authenticate and authorise users for your own domains:
+- create an auth bot for your domain e.g. `@adhocDomainAuthBot` via command `/newbot` to the Telegram `@BotFather`
+- configure and deploy this auth bot service on your domain for location `/authbot/` e.g. using a Docker image
+- set the bot webhook via `api.telegram.org` to `/authbot/webhook/`
+- as a user, send the command `/login` - voila!
+
+How it works:
+- your authbot will reply to the user with a magic pending login link to itself e.g. `/authbot/login/${user}/${token}`
+- the user clicks on that `/authbot/login/` link in the chat with the authbot
+- the authbot HTTP handler for `/authbot/login/` will create the session in Redis, set the session cookie on the HTTP response, and redirect to your landing page for auth'ed visitors e.g. `/auth`
+- your site can verify the session cookie via Redis or HTTPS
+- the original authoritative (admin) Telegram username can authorise other users
+
 
 ![screenshot](https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-page-auth.png)
 <hr>
@@ -38,7 +43,7 @@ async function startHttpServer() {
             await handleMessage(ctx.request.body);
         }
     });
-    api.get('/authbot/in/:username/:token', async ctx => {
+    api.get('/authbot/login/:username/:token', async ctx => {
         await handleIn(ctx);
     });
     api.get('/authbot/logout', async ctx => {
@@ -46,7 +51,17 @@ async function startHttpServer() {
     });
 ```
 
-The `/authbot/in/` HTTP handler will set the session cookie:
+Additionally the following endpoint can allow session validation via HTTP:
+```javascript
+if (config.sessionRoute) {
+    api.get('/authbot-session/:username/:sessionId', async ctx => {
+        await handleSession(ctx);
+    });
+}
+```
+where this location is deliberately different from `/authbot/` so that it must be specifically allowed e.g. by your Nginx API gateway.
+
+The `/authbot/login/` HTTP handler will set the session cookie:
 ```javascript
 assert.equal(login.username, username, 'username');
 assert.equal(login.token, token, 'token');
@@ -65,21 +80,23 @@ ctx.cookies.set('sessionId', sessionId, {maxAge: config.cookieExpire, domain: co
 ctx.redirect(config.redirectAuth);
 ```
 
-For demo purposes we also serve the following pages, which would ordinarily be served by the app:
+For demo purposes we also serve the following landing pages, which would ordinarily be served by the app:
 ```javascript
-api.get('/', async ctx => {
-    await handleHome(ctx);
-});
-api.get('/auth', async ctx => { // authentication succeeded
-    await handleAuth(ctx);
-});
-api.get('/noauth', async ctx => { // authentication failed
-    await handleNoAuth(ctx);
-});
+if (config.demo) {
+    api.get('/auth', async ctx => {
+        await handleAuth(ctx);
+    });
+    api.get('/noauth', async ctx => {
+        await handleNoAuth(ctx);
+    });
+    api.get('/', async ctx => {
+        await handleHome(ctx);
+    });
+}
 ```
-where `/auth` and `/noauth` are redirects from `/authbot/in`
+where `/auth` and `/noauth` are redirects from `/authbot/login`
 
-The login is created in Redis by the Telegram bot, which provides the `/authbot/in/` "magic link."
+The login is created in Redis by the Telegram bot, which provides the `/authbot/login/` "magic link."
 ```javascript
 async function handleTelegramLogin(request) {
     const {username, name, chatId} = request;
@@ -114,6 +131,7 @@ const configDefault = {
     sendTimeout: 8000,
     redirectAuth: '/auth',
     redirectNoAuth: '/noauth',
+    sessionRoute: true,
     loggerLevel: 'debug'
 };
 ```
