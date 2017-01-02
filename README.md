@@ -345,3 +345,9 @@ address=`
 ```
 
 That address is set on the API gateway e.g. Nginx, to route HTTP requests for the domain and `/authbot` location to the bot.
+
+## Auto restart
+
+In a development environment on the cloud interacting with a test bot, it is useful to watch updated code and restart.
+
+See https://github.com/evanx/authbot/blob/master/docs/auto-restart.md

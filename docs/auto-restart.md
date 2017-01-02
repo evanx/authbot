@@ -64,7 +64,3 @@ done
 ```
 
 Note that the service is down for a few seconds. As such, this feature is not suitable for production usage.
-
-## Auto restart
-
-See https://
