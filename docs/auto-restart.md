@@ -52,14 +52,16 @@ async function startSubscribeEnd() {
     state.sub.subscribe(configFile.endChannel);
 }
 ```
+where `end()` will exit with `0` i.e. not an error exit.
 
 We run the app in a loop so that it will auto restart.
 ```shell
 while true
 do
   configFile=~/private-config/authtest.webserva.com/authbot/development.js \
-  NODE_ENV=development node --harmony-async-await tmp/index.js
+  NODE_ENV=development node --harmony-async-await tmp/index.js || sleep 10
 done
 ```
+where an error exit will result in a short sleep.
 
 Note that the service is down for a few seconds. As such, this feature is not suitable for production usage.
