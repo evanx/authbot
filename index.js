@@ -160,9 +160,11 @@ if (configFile && process.env.NODE_ENV === 'development') {
         const apiUrl = `${state.botUrl}/setWebhook?url=${encodeURI(webhookUrl)}`;
         console.log(`curl -s '${apiUrl}' | jq '.'`);
     });
-    console.log(`\nssh -L${configFile.hubLocalPort}:127.0.0.1:6379 ${configFile.hubHost}`);
-    const subscribeChannel = [configFile.hubNamespace, config.secret].join(':');
-    console.log(`\nredis-cli -p ${configFile.hubLocalPort} subscribe "${subscribeChannel}"\n`);
+    if (configFile.hubNamespace && configFile.hubLocalPort && configFile.hubHost) {
+        const subscribeChannel = [configFile.hubNamespace, config.secret].join(':');
+        console.log(`\nssh -L${configFile.hubLocalPort}:127.0.0.1:6379 ${configFile.hubHost}`);
+        console.log(`\nredis-cli -p ${configFile.hubLocalPort} subscribe "${subscribeChannel}"\n`);
+    }
     console.log([
         ...Object.keys(config).map(key => `${key}=${config[key]}`),
         'npm run development'
