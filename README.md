@@ -114,6 +114,16 @@ async function handleTelegramLogin(request) {
 ```
 where a secret token is randomly generated for the "magic link."
 
+```javascript
+function generateToken(length = 16) {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const charset = '0123456789' + letters + letters.toLowerCase();
+    return crypto.randomBytes(length).map(
+        value => charset.charCodeAt(Math.floor(value * charset.length / 256))
+    ).toString();
+}
+```
+
 <img src="https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-mobile1.jpg" width="360"/>
 <hr>
 

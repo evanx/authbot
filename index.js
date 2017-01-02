@@ -181,7 +181,6 @@ if (configFile && process.env.NODE_ENV === 'development') {
     ].join('\n'));
 }
 
-
 const redis = require('redis');
 const client = redis.createClient(6379, config.redisHost);
 
@@ -196,13 +195,15 @@ async function multiExecAsync(client, multiFunction) {
 function generateToken(length = 16) {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const charset = '0123456789' + letters + letters.toLowerCase();
-    return crypto.randomBytes(length).map(value => charset.charCodeAt(Math.floor(value * charset.length / 256))).toString();
+    return crypto.randomBytes(length).map(
+        value => charset.charCodeAt(Math.floor(value * charset.length / 256))
+    ).toString();
 }
 
 (async function() {
     state.started = Math.floor(Date.now()/1000);
     state.pid = process.pid;
-    logger.info('start', JSON.stringify({config, state}, null, 2));
+    logger.info('start', JSON.stringify({config, configFile, state}, null, 2));
     multiExecAsync(client, multi => {
         multi.hmset([config.namespace, 'started'].join(':'), state);
     });
@@ -231,9 +232,9 @@ async function start() {
     await startHttpServer();
     if (config.hubRedis) {
         await startSubscribeHub();
-    } else if (process.env.srcChannel) {
+    } else if (configFile.srcChannel) {
         await startSubscribeSrc();
-    } else if (process.env.endChannel) {
+    } else if (configFile.endChannel) {
         await startSubscribeEnd();
     }
 }
@@ -253,35 +254,35 @@ async function startSubscribeHub() {
 }
 
 async function startSubscribeSrc() {
-    assert(process.env.srcFile, 'srcFile');
+    assert(configFile.srcFile, 'srcFile');
     state.sub = redis.createClient();
     state.sub.on('message', (channel, message) => {
-        if (channel === process.env.srcChannel) {
-            fs.writeFile(process.env.srcFile, message, err => {
+        if (channel === configFile.srcChannel) {
+            fs.writeFile(configFile.srcFile, message, err => {
                 if (err) {
-                    logger.error('srcFile', process.env.srcFile, err);
-                } else if (process.env.srcQueue) {
+                    logger.error('srcFile', configFile.srcFile, err);
+                } else if (configFile.srcQueue) {
                     if (!state.srcPort || state.srcPort > config.port + 4) {
                         state.srcPort = config.port + 1;
                     } else {
                         state.srcPort++;
                     }
-                    client.lpush(process.env.srcQueue, state.srcPort);
-                } else if (!process.env.endChannel) {
+                    client.lpush(configFile.srcQueue, state.srcPort);
+                } else if (!configFile.endChannel) {
                     end();
                 }
             });
         }
     });
-    state.sub.subscribe(process.env.srcChannel);
+    state.sub.subscribe(configFile.srcChannel);
 }
 
 async function startSubscribeEnd() {
-    assert(process.env.endQueue, 'endQueue');
-    client.lpush(process.env.endQueue, config.port);
+    assert(configFile.endQueue, 'endQueue');
+    client.lpush(configFile.endQueue, config.port);
     state.sub = redis.createClient();
     state.sub.on('message', (channel, message) => {
-        if (channel === process.env.endChannel) {
+        if (channel === configFile.endChannel) {
             if (parseInt(message) !== config.port) {
                 end();
             }
@@ -730,7 +731,7 @@ async function handleSession(ctx) {
         if (elapsedHours > 25) {
             return `1 day and ${elapsedHours - 24} hours`;
         }
-        if (elapsedMinutes > 120) {
+        if (elapsedMinutes >= 120) {
             return `${elapsedHours} hours`;
         }
         if (elapsedMinutes > 61) {
