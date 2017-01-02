@@ -8,8 +8,7 @@ A Telegram bot for auth and login to a web domain.
 - set the bot webhook via `api.telegram.org` to `/authbot`
 - as a user, send the command `/login`
 - your authbot will reply with a magic login link to itself e.g. `/authbot/in/${user}/${token}`
-- the authbot HTTP handler will enroll the session in Redis
-- the authbot will redirect e.g. `/auth` for your actual site, with the session cookie set
+- the authbot HTTP handler will create the session in Redis, set session cookie on the HTTP response, and redirect e.g. `/auth` for your actual site
 - your site can verify the session cookie via Redis and get the Telegram username and role
 - the original authoritative (admin) Telegram username can authorise other users
 
