@@ -1,28 +1,27 @@
 
 mkdir -p tmp
 
-pid=''
+redis-cli del authbot:src
+
+srcChannel='authbot:src' srcFile='tmp/index.js' srcQueue='authbot:src' \
+loggerLevel=debug configFile=~/private-config/authdemo.webserva.com/authbot.production.js \
+node --harmony-async-await index.js &
 
 while true  
 do
-  redis-cli brpop 'authbot:src' 10 | tail -n +2 > tmp/index.js
-  wc tmp/index.js
-  head tmp/index.js 
-  if head -1 tmp/index.js | grep '^const'
+  srcPort=`redis-cli brpop authbot:src 10`
+  if [ -n "$srcPort" ] 
   then
-    if [ -n "$pid" ]
+    echo "srcPort $srcPort"
+    port=$srcPort endChannel='authbot:end' endQueue='authbot:end' \
+    loggerLevel=debug configFile=~/private-config/authdemo.webserva.com/authbot.production.js \
+    node --harmony-async-await tmp/index.js &
+    endPort=`redis-cli brpop authbot:end 10`
+    if [ -n "$endPort" ] 
     then
-      echo "kill $pid"
-      kill $pid
-      sleep .25
+      echo "endPort $endPort"
+      sed -i "s/localhost:[0-9]*; # port/localhost:$endPort; # port" ~/nginx/routes/authdemo
+      ssh root@localhost service nginx reload
     fi
-    loggerLevel=debug configFile=~/private-config/authdemo.webserva.com/authbot.production.js node --harmony-async-await tmp/index.js &
-    pid=$!
-    echo "pid $pid"
-    sleep 1
-    ps aux | grep authbot.production | grep debug 
-    redis-cli hgetall 'authbot:started'
-    rpid=`redis-cli hget 'authbot:started' pid`
-    echo "rpid $pid"
   fi
 done

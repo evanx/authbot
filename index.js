@@ -207,30 +207,64 @@ async function startProduction() {
 }
 
 async function start() {
+    await startHttpServer();
     if (config.hubRedis) {
-        assert(config.hubNamespace, 'hubNamespace');
-        state.sub = redis.createClient(config.hubRedis);
-        state.sub.on('message', (channel, message) => {
+        await startSubscribeHub();
+    } else if (process.env.srcChannel) {
+        await startSubscribeSrc();
+    } else if (process.env.endChannel) {
+        await startSubscribeEnd();
+    }
+}
+
+async function startSubscribeHub() {
+    assert(config.hubNamespace, 'hubNamespace');
+    state.sub = redis.createClient(config.hubRedis);
+    state.sub.on('message', (channel, message) => {
+        if (channel.endsWith(config.secret)) {
             logger.debug({channel, message});
             handleTelegramMessage(JSON.parse(message));
-        });
-        state.sub.subscribe([config.hubNamespace, config.secret].join(':'));
-    } else if (process.env.srcChannel) {
-        logger.info('src', process.env.srcChannel);
-        assert(process.env.srcFile, 'srcFile');
-        state.sub = redis.createClient();
-        state.sub.on('message', (channel, message) => {
+        } else {
+            logger.warn('hubRedis', {channel});
+        }
+    });
+    state.sub.subscribe([config.hubNamespace, config.secret].join(':'));
+}
+
+async function startSubscribeSrc() {
+    assert(process.env.srcFile, 'srcFile');
+    assert(process.env.srcQueue, 'srcQueue');
+    state.sub = redis.createClient();
+    state.sub.on('message', (channel, message) => {
+        if (channel === process.env.srcChannel) {
             fs.writeFile(process.env.srcFile, message, err => {
                 if (err) {
                     logger.error('srcFile', process.env.srcFile, err);
                 } else {
-                    end();
+                    if (!state.srcPort || state.srcPort > config.port + 4) {
+                        state.srcPort = config.port + 1;
+                    } else {
+                        state.srcPort++;
+                    }
+                    client.lpush(process.env.srcQueue, state.srcPort);
                 }
             });
-        });
-        state.sub.subscribe(process.env.srcChannel);
-    }
-    return startHttpServer();
+        }
+    });
+    state.sub.subscribe(process.env.srcChannel);
+}
+
+async function startSubscribeEnd() {
+    assert(process.env.endQueue, 'endQueue');
+    client.lpush(process.env.endQueue, config.port);
+    state.sub = redis.createClient();
+    state.sub.on('message', (channel, message) => {
+        if (channel === process.env.endChannel) {
+            if (parseInt(message) !== config.port) {
+                end();
+            }
+        }
+    });
 }
 
 async function startHttpServer() {
