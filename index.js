@@ -783,7 +783,7 @@ async function handleTelegramListRoles(request) {
         multi.smembers(rolesKey);
     });
     const results = await multiExecAsync(client, multi => {
-        roles.forEach(role => multi.members([config.namespace, 'role', role, 's'].join(':')));
+        roles.forEach(role => multi.smembers([config.namespace, 'role', role, 's'].join(':')));
     });
     const roleRepo = {};
     roles.forEach((role, index) => roleRepo[role] = results[index]);
