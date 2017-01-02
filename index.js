@@ -377,7 +377,7 @@ async function handleAuth(ctx) {
         heading: `Welcome ${session.name}`,
         paragraphs: [
             `Logout to clear the session and cookie via <a href="/authbot/logout">/authbot/logout</a>`,
-            `You can also logout by sending <tt>/out</tt> command to {botLink}.`,
+            `You can also logout by sending <tt>/logout</tt> command to {botLink}.`,
             `Incidently, your session ID is set via cookie on this domain, and can be validated ` +
             `against the Redis storage used by this AuthBot.`
         ]
@@ -557,13 +557,13 @@ async function handleTelegramLogout(request) {
     } else if (sessions.length === 1) {
         const session = sessions[0];
         await sendTelegramReply(request, 'html', [
-            `Destroyed the session that was created ${formatElapsed(session.started)} ago.`,
+            `The session that was created ${formatElapsed(session.started)} ago, has now been deleted.`,
         ]);
     } else {
         const session0 = sessions[0];
         const session = lodash.last(sessions);
         await sendTelegramReply(request, 'html', [
-            `Destroyed ${sessions.length} sessions.`,
+            `${sessions.length} sessions have been deleted.`,
             `The latest was created ${formatElapsed(session0.started)} ago.`,
             `The oldest was created ${formatElapsed(session.started)} ago.`,
         ]);
