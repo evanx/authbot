@@ -9,6 +9,8 @@ do
   then
     redis-cli get $ns:$file > tmp/$file
     redis-cli publish $ns:adv $file
-    echo $ns:adv $file
+    ls -l tmp/$file
+    head tmp/$file
+    echo $ns:adv $file 
   fi
 done
