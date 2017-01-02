@@ -149,7 +149,6 @@ if (missingConfigKeys.length) {
 
 logger.level = config.loggerLevel;
 
-state.redirectNoAuth = process.env.redirectNoAuth || `https://telegram.me/${config.bot}`;
 state.botUrl = `https://api.telegram.org/bot${config.token}`;
 
 if (configFile && process.env.NODE_ENV === 'development') {
@@ -468,7 +467,7 @@ async function handleLogin(ctx) {
     if (!login) {
         const sessionId = ctx.cookies.get('sessionId');
         if (sessionId) {
-            logger.debug('handleLogin', {sessionId}, state.redirectNoAuth);
+            logger.debug('handleLogin', {sessionId}, config.redirectNoAuth);
         }
         ctx.status = 403;
         const botUrl = /(Mobile)/.test(ctx.get('user-agent'))
