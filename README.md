@@ -19,6 +19,9 @@ Deploy a bot to authenticate and authorise users for your own domains:
 - set the bot webhook via `api.telegram.org` to `/authbot/webhook/`
 - as a user, send the command `/login` - voila!
 
+![screenshot](https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab001-roles.png)
+
+<hr>
 How it works:
 - your authbot will reply to the user with a magic pending login link to itself e.g. `/authbot/login/${user}/${token}`
 - the user clicks on that `/authbot/login/` link in the chat with the authbot
