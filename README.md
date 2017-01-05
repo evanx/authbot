@@ -3,7 +3,7 @@
 
 A Telegram bot for auth and login to a web domain.
 
-![screenshot](https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-bot.png)  
+<img src="https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-mobile1.jpg" width="360"/>
 <hr>
 
 This provides a relatively easy way to provide authentication and authorisation for any domain:
@@ -19,7 +19,8 @@ Deploy a bot to authenticate and authorise users for your own domains:
 - set the bot webhook via `api.telegram.org` to `/authbot/webhook/`
 - as a user, send the command `/login` - voila!
 
-![screenshot](https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab001-roles.png)
+![screenshot](https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-page-auth.png)
+<hr>
 
 <hr>
 How it works:
@@ -30,7 +31,10 @@ How it works:
 - the original authoritative (admin) Telegram username can authorise other users
 
 
-![screenshot](https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-page-auth.png)
+![screenshot](https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-bot.png)  
+<hr>
+
+![screenshot](https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab001-roles.png)
 <hr>
 
 ## Implementation
@@ -126,9 +130,6 @@ function generateToken(length = 16) {
     ).toString();
 }
 ```
-
-<img src="https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab01-mobile1.jpg" width="360"/>
-<hr>
 
 ## Config
 

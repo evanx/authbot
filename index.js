@@ -430,8 +430,8 @@ async function handleSession(ctx) {
         ctx.status = 200;
         ctx.body = 'Authenticated';
     } else {
-        ctx.status = 403;
-        ctx.body = 'Access prohibited';
+        ctx.status = 401;
+        ctx.body = 'Unauthorised';
     }
 }
 
@@ -500,7 +500,7 @@ async function handleLogin(ctx) {
         if (sessionId) {
             logger.debug('handleLogin', {sessionId});
         }
-        ctx.status = 403;
+        ctx.status = 401;
         ctx.redirect(getRedirectNoAuth('login'));
         return;
     }
