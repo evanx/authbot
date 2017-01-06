@@ -3,7 +3,7 @@
 
 A Telegram bot for auth and login to a web domain.
 
-<img src="https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab001-mobile1.jpg" width="360"/>
+<img src="https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab001-mobile2.jpg" width="360"/>
 <hr>
 
 This provides a relatively easy way to provide authentication and authorisation for any domain:
@@ -19,10 +19,9 @@ Deploy a bot to authenticate and authorise users for your own domains:
 - set the bot webhook via `api.telegram.org` to `/authbot/webhook/`
 - as a user, send the command `/login` - voila!
 
-<img src="https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab001-mobile2.jpg" width="360"/>
+<img src="https://raw.githubusercontent.com/evanx/authbot/master/docs/images/readme/ab001-mobile1.jpg" width="360"/>
 <hr>
 
-<hr>
 How it works:
 - your authbot will reply to the user with a magic pending login link to itself e.g. `/authbot/login/${user}/${token}`
 - the user clicks on that `/authbot/login/` link in the chat with the authbot
