@@ -555,8 +555,8 @@ async function handleTelegramMessage(message) {
     } else {
         await sendTelegram(request.chatId, 'html', [
             `Try /login.`,
-            `Session data expires after ${config.sessionExpire} seconds and is not recorded.`,
-            `Powered by github.com/evanx/authbot.`
+            `Sessions expire after ${config.sessionExpire} seconds.`,
+            `Powered by github.com/evanx/authbot by @evanxsummers.`
         ]);
     }
 }
@@ -573,7 +573,7 @@ async function handleTelegramLogin(request) {
         await sendTelegramReply(request, 'html', [
             `You can login via https://${[config.domain, 'authbot', 'login', username, token].join('/')}.`,
             `This link expires in ${config.loginExpire} seconds.`,
-            `Powered by https://github.com/evanx/authbot.`
+            `Powered by https://github.com/evanx/authbot by @evanxsummers.`
         ]);
     } else {
         await sendTelegramReply(request, 'html', [
