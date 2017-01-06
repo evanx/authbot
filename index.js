@@ -522,7 +522,8 @@ async function handleLogin(ctx) {
     if (config.notifyTelegramLogin) {
         if (session.chatId && session.name) {
             await sendTelegram(session.chatId, 'html', [
-                `Thanks ${session.name}, you have logged in.`
+                `Thanks ${session.name}, you have logged in.`,
+                `Sessions expire after ${config.sessionExpire} seconds.`                
             ]);
         }
     }
