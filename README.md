@@ -275,7 +275,7 @@ CMD ["node", "--harmony-async-await", "index.js"]
 i.e. with your own domain, username, bot name, token, secret etc:
 ```javascript
   docker run \
-    --name authbot-test -d \
+    --name authbot_test -d \
     --network host \
     -e NODE_ENV=test \
     -e domain='' \
@@ -306,24 +306,25 @@ cat /etc/issue
 
 In this example we create an isolated network:
 ```shell
-docker network create --driver bridge redis
+docker network create --driver bridge authbot_network
 ```
 
-We can create a Redis container named `redis-login` as follows
+We can create a Redis container named `redis_authbot` as follows
 ```shell
-docker run --network=redis --name redis-login -d redis
+docker run --network=authbot_network --name redis_authbot -d redis
 ```
 
 We query its IP number and store in shell environment variable `redisHost`
 ```
-redisHost=`docker inspect --format '{{ .NetworkSettings.Networks.redis.IPAddress }}' redis-login`
-echo $loggerHost
+redisHost=`docker inspect \
+  --format '{{ .NetworkSettings.Networks.authbot_network.IPAddress }}' redis_authbot`
+echo $redisHost
 ```
 which we check that set e.g. to `172.18.0.2`
 
 Finally we run our service container:
 ```shell
-docker run --network=redis --name authbot-test -d -p 8080 \
+docker run --network=authbot_network --name authbot_test -d -p 8080 \
   -e NODE_ENV=test \
   -e redisHost=$redisHost \
   -e domain='' \
@@ -333,17 +334,17 @@ docker run --network=redis --name authbot-test -d -p 8080 \
   -e admin='' \  
   authbot:test
 ```
-where we configure `redisHost` as the `redis-login` container.
+where we configure `redisHost` as the `redis_authbot` container.
 
 Note that we:
-- use the `redis` isolated network bridge for the `redis-login` container
-- name this container `authbot-test`
+- use the `redis` isolated network bridge for the `redis_authbot` container
+- name this container `authbot_test`
 - use the previously built image `authbot:test`
 
 Get its IP address:
 ```
 address=`
-  docker inspect --format '{{ .NetworkSettings.Networks.redis.IPAddress }}' authbot-test
+  docker inspect --format '{{ .NetworkSettings.Networks.redis.IPAddress }}' authbot_test
 `
 ```
 
