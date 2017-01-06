@@ -554,9 +554,9 @@ async function handleTelegramMessage(message) {
         return handleTelegramRevoke(request);
     } else {
         await sendTelegram(request.chatId, 'html', [
-            `Try <code>/login</code>.`,
+            `Try /login.`,
             `Session data expires after ${config.sessionExpire} seconds and is not recorded.`,
-            `Powered by https://github.com/evanx/authbot.`
+            `Powered by github.com/evanx/authbot.`
         ]);
     }
 }
