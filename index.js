@@ -556,7 +556,7 @@ async function handleTelegramMessage(message) {
         await sendTelegram(request.chatId, 'html', [
             `Try <code>/login</code>.`,
             `Session data expires after ${config.sessionExpire} seconds and is not recorded.`,
-            `Powered by https://github.com/evanx/authbot.`
+            `Powered by <code>github.com/evanx/authbot</code>.`
         ]);
     }
 }
