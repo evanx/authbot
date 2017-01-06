@@ -431,7 +431,7 @@ async function handleSession(ctx) {
         ctx.body = 'Authenticated';
     } else {
         ctx.status = 401;
-        ctx.body = 'Unauthorised';
+        ctx.body = 'Unauthorized';
     }
 }
 
@@ -523,7 +523,7 @@ async function handleLogin(ctx) {
         if (session.chatId && session.name) {
             await sendTelegram(session.chatId, 'html', [
                 `Thanks ${session.name}, you have logged in.`,
-                `Sessions expire after ${config.sessionExpire} seconds.`                
+                `Sessions expire after ${config.sessionExpire} seconds.`
             ]);
         }
     }
