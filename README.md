@@ -331,7 +331,7 @@ docker run --network=authbot_network --name authbot_test -d -p 8080 \
   -e bot='' \
   -e secret='' \
   -e token='' \
-  -e admin='' \  
+  -e admin='' \
   authbot:test
 ```
 where we configure `redisHost` as the `redis_authbot` container.
@@ -344,8 +344,9 @@ Note that we:
 Get its IP address:
 ```
 address=`
-  docker inspect --format '{{ .NetworkSettings.Networks.redis.IPAddress }}' authbot_test
+  docker inspect --format '{{ .NetworkSettings.Networks.authbot_network.IPAddress }}' authbot_test
 `
+echo $address
 ```
 
 That address is set on the API gateway e.g. Nginx, to route HTTP requests for the domain and `/authbot` location to the bot.

@@ -70,7 +70,7 @@ const configMeta = {
 };
 
 const state = {};
-const configFile = (!process.env.configFile? null: require(process.env.configFile));
+const configFile = (!process.env.configFile? {}: require(process.env.configFile));
 const configKeys = [];
 const missingConfigKeys = [];
 const config = Object.keys(configMeta)
@@ -80,7 +80,7 @@ const config = Object.keys(configMeta)
         assert(process.env[key] !== '', key);
         config[key] = process.env[key];
         configKeys.push(key);
-    } else if (configFile && configFile[key]) {
+    } else if (configFile[key]) {
         config[key] = configFile[key];
         configKeys.push(key);
     } else if (!configDefault[key] && configMeta[key] && configMeta[key].required !== false) {
@@ -153,7 +153,7 @@ logger.level = config.loggerLevel;
 
 state.botUrl = `https://api.telegram.org/bot${config.token}`;
 
-if (configFile && process.env.NODE_ENV === 'development') {
+if (process.env.configFile && process.env.NODE_ENV === 'development') {
     [
         `https://${configFile.hubDomain}/webhook/${config.secret}`,
         `https://${config.domain}/authbot/webhook/${config.secret}`
