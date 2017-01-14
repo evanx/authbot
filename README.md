@@ -356,3 +356,6 @@ That address is set on the API gateway e.g. Nginx, to route HTTP requests for th
 In a development environment on the cloud interacting with a test bot, it is useful to watch `index.js` for changes and restart.
 
 See https://github.com/evanx/authbot/blob/master/docs/auto-restart.md
+
+https://twitter.com/@evanxsummers
+
