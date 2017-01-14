@@ -4,4 +4,4 @@ RUN npm install
 ADD index.js .
 ENV port 8080
 EXPOSE 8080
-CMD ["node", "--harmony-async-await", "index.js"]
+CMD ["node", "--harmony", "index.js"]

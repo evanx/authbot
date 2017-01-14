@@ -254,9 +254,9 @@ where this help is generated from `configMeta`
 
 Let's build our application container:
 ```shell
-docker build -t authbot:test https://github.com/evanx/authbot.git
+docker build -t authbot https://github.com/evanx/authbot.git
 ```
-where the image is named and tagged as `authbot:test`
+where the image is named and tagged as `authbot`
 
 Notice that the default `Dockerfile` is as follows:
 ```
@@ -283,7 +283,7 @@ i.e. with your own domain, username, bot name, token, secret etc:
     -e secret='' \
     -e token='' \
     -e admin='evanxsummers' \
-    authbot:test
+    authbot
 ```
 
 ## Docker notes
@@ -332,7 +332,7 @@ docker run --network=authbot_network --name authbot_test -d -p 8080 \
   -e secret='' \
   -e token='' \
   -e admin='' \
-  authbot:test
+  authbot
 ```
 where we configure `redisHost` as the `redis_authbot` container.
 
