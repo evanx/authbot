@@ -266,7 +266,7 @@ RUN npm install
 ADD index.js .
 ENV port 8080
 EXPOSE 8080
-CMD ["node", "--harmony-async-await", "index.js"]
+CMD ["node", "--harmony", "index.js"]
 ```
 
 ## Docker run
@@ -358,4 +358,3 @@ In a development environment on the cloud interacting with a test bot, it is use
 See https://github.com/evanx/authbot/blob/master/docs/auto-restart.md
 
 https://twitter.com/@evanxsummers
-
