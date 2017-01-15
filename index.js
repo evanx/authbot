@@ -469,7 +469,7 @@ async function handleLogout(ctx) {
             if (config.notifyTelegramLogout) {
                 if (session.chatId && session.name && session.started) {
                     await sendTelegram(session.chatId, 'html', [
-                        `Thanks ${session.name}, you have logged out of a session after ${formatElapsed(session.started)}.`
+                        `Thanks ${session.name}, you have logged out of a session after ${formatElapsed(session.started)}.`,
                         `Use the /login command again to get a new magic login link.`
                     ]);
                 }
