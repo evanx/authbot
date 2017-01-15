@@ -5,11 +5,11 @@
   "main": "index.js",
   "scripts": {
     "lint": "eslint --cache src",
-    "development": "NODE_ENV=development node --harmony-async-await index.js",
-    "test": "NODE_ENV=test node --harmony-async-await index.js",
-    "tmp": "NODE_ENV=development node --harmony-async-await tmp/index.js",
-    "start": "node --harmony-async-await index.js",
-    "pm2start": "pm2 start index.js --node-args='--harmony-async-await' --name `basename $PWD`"
+    "development": "NODE_ENV=development node --harmony index.js",
+    "test": "NODE_ENV=test node --harmony index.js",
+    "tmp": "NODE_ENV=development node --harmony tmp/index.js",
+    "start": "node --harmony index.js",
+    "pm2start": "pm2 start index.js --node-args='--harmony' --name `basename $PWD`"
   },
   "author": "Evan Summers",
   "license": "ISC",
