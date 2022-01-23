@@ -16,15 +16,15 @@
   "dependencies": {
     "bluebird": "^3.4.6",
     "koa": "^2.0.0",
-    "koa-bodyparser": "^3.2.0",
+    "koa-bodyparser": "^4.3.0",
     "koa-router": "^7.0.1",
     "lodash": "^4.17.15",
-    "node-fetch": "^1.6.3",
-    "redis": "^2.6.3",
+    "node-fetch": "^3.2.0",
+    "redis": "^4.0.2",
     "winston": "^2.3.0"
   },
   "devDependencies": {
-    "eslint": "^6.2.2"
+    "eslint": "^8.7.0"
   },
   "repository": {
     "type": "git",
